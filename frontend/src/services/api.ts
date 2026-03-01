@@ -1,11 +1,22 @@
 // file: frontend/src/services/api.ts
-import axios from 'axios';
 const BASE = '/api/v1';
-const BASE_URL = 'http://localhost:8000/api/v1';
 
 async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+async function postJSON<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || `API error: ${res.status}`);
+  }
   return res.json();
 }
 
@@ -29,28 +40,11 @@ export const api = {
   exportCsvUrl: (symbol: string, minutes = 60) =>
     `${BASE}/spreads/export?symbol=${symbol}&minutes=${minutes}`,
 
-  executeArb: async (symbol: string, side: 'LONG_LIGHTER' | 'SHORT_LIGHTER', amount: number) => {
-    const response = await axios.post(`${BASE_URL}/execute`, {
-      symbol,
-      side,
-      amount
-    });
-    return response.data;
-  },
+  positions: (symbol: string) => fetchJSON<any>(`/positions?symbol=${symbol}`),
 
-  closePositions: async (symbol: string) => {
-    const response = await fetch(`${BASE_URL}/execute/close_all`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ symbol }), 
-    });
-    
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.detail || 'Network response was not ok');
-    }
-    return response.json();
-  }
+  executeArb: (symbol: string, side: 'LONG_LIGHTER' | 'SHORT_LIGHTER', amount: number) =>
+    postJSON<any>('/execute', { symbol, side, amount }),
+
+  closePositions: (symbol: string) =>
+    postJSON<any>('/execute/close_all', { symbol }),
 };

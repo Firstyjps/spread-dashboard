@@ -18,7 +18,7 @@ from app.config import settings
 from app.api.routes import router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
-from app.storage.database import init_db, insert_tick, insert_spread
+from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data
 
 log = structlog.get_logger()
 
@@ -51,14 +51,14 @@ async def poll_loop():
                 if isinstance(bybit_tick, Exception):
                     log.error("bybit_poll_error", symbol=symbol, error=str(bybit_tick))
                 elif bybit_tick:
-                    update_tick(bybit_tick)
+                    await update_tick(bybit_tick)
                     await insert_tick(bybit_tick)
 
                 # Process Lighter tick
                 if isinstance(lighter_tick, Exception):
                     log.error("lighter_poll_error", symbol=symbol, error=str(lighter_tick))
                 elif lighter_tick:
-                    update_tick(lighter_tick)
+                    await update_tick(lighter_tick)
                     await insert_tick(lighter_tick)
 
                 # Compute spread if both ticks available
@@ -94,6 +94,11 @@ async def lifespan(app: FastAPI):
     # Load Lighter market ID mapping
     await lighter_collector.fetch_market_ids()
 
+    # Cleanup old data on startup (keep last 7 days)
+    deleted = await cleanup_old_data(days=7)
+    if deleted > 0:
+        log.info("db_cleanup_on_startup", rows_deleted=deleted)
+
     # Start background polling
     global _poll_task
     _poll_task = asyncio.create_task(poll_loop())
@@ -118,10 +123,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS - allow frontend dev server
+# CORS - allow frontend dev server (configurable via CORS_ORIGINS env)
+_cors_origins = [
+    o.strip()
+    for o in (settings.cors_origins or "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -25,7 +25,9 @@ export function useWebSocket({ url, onMessage, reconnectInterval = 3000 }: UseWe
         try {
           const data = JSON.parse(event.data);
           onMessage?.(data);
-        } catch {}
+        } catch (err) {
+          console.warn('[WS] Failed to parse message:', err);
+        }
       };
 
       ws.onclose = () => {

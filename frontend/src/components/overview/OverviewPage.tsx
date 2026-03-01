@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { SpreadChart } from './SpreadChart';
-import { ExecutionControl } from './ExecutionControl';
+import { ExecutionPanel } from './ExecutionPanel';
 
 interface Props {
   data: any;
@@ -245,7 +245,7 @@ export function OverviewPage({ data }: Props) {
                       </div>
                     </div>
                   </div>
-                  <ExecutionControl symbol={sym}/>
+                  <ExecutionPanel symbol={sym} />
                 </div>
               );
             })}

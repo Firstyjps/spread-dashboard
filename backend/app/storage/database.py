@@ -179,3 +179,31 @@ async def get_recent_alerts(limit: int = 50):
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+
+
+async def cleanup_old_data(days: int = 7) -> int:
+    """Delete data older than N days to prevent unbounded DB growth.
+    Returns total number of rows deleted. Never crashes — best-effort only."""
+    try:
+        cutoff_ts = (time.time() - days * 86400) * 1000  # ms
+        total_deleted = 0
+        async with aiosqlite.connect(DB_PATH) as db:
+            for table in ["ticks", "spread_metrics", "funding_snapshots", "alerts"]:
+                try:
+                    cursor = await db.execute(
+                        f"DELETE FROM {table} WHERE ts < ?", (cutoff_ts,)
+                    )
+                    total_deleted += cursor.rowcount
+                except Exception as e:
+                    log.warning("db_cleanup_table_error", table=table, error=str(e))
+            await db.commit()
+            # Reclaim disk space (best-effort)
+            try:
+                await db.execute("VACUUM")
+            except Exception as e:
+                log.warning("db_vacuum_skipped", error=str(e))
+        log.info("db_cleanup_complete", days=days, rows_deleted=total_deleted)
+        return total_deleted
+    except Exception as e:
+        log.warning("db_cleanup_failed", error=str(e))
+        return 0

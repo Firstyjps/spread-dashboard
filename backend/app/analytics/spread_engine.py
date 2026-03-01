@@ -3,6 +3,7 @@
 Spread computation engine.
 Computes cross-exchange metrics from normalized tick data.
 """
+import asyncio
 import time
 import structlog
 from collections import deque
@@ -11,18 +12,22 @@ from app.models import NormalizedTick, SpreadMetric
 
 log = structlog.get_logger()
 
-# In-memory latest ticks per exchange/symbol
+# In-memory latest ticks per exchange/symbol (protected by _lock)
 latest_ticks: Dict[str, NormalizedTick] = {}  # key: "{exchange}:{symbol}"
 
 # Rolling window for z-score computation
 spread_history: Dict[str, deque] = {}  # key: symbol
 ZSCORE_WINDOW = 100
 
+# asyncio.Lock to prevent race conditions between poll_loop writes and API reads
+_lock = asyncio.Lock()
 
-def update_tick(tick: NormalizedTick):
-    """Store latest tick in memory."""
+
+async def update_tick(tick: NormalizedTick):
+    """Store latest tick in memory (thread-safe)."""
     key = f"{tick.exchange}:{tick.symbol}"
-    latest_ticks[key] = tick
+    async with _lock:
+        latest_ticks[key] = tick
 
 
 def get_latest_tick(exchange: str, symbol: str) -> Optional[NormalizedTick]:

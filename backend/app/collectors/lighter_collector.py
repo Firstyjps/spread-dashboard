@@ -31,6 +31,9 @@ BASE_URL = settings.lighter_base_url
 SYMBOL_TO_MARKET_ID: Dict[str, int] = {}
 MARKET_ID_TO_SYMBOL: Dict[int, str] = {}
 
+# Market metadata: normalized symbol -> {size_decimals, price_decimals, min_base_amount}
+MARKET_META: Dict[str, Dict[str, Any]] = {}
+
 # Lighter short symbol -> our normalized symbol
 # e.g., "BTC" -> "BTCUSDT", "ETH" -> "ETHUSDT"
 LIGHTER_SYM_TO_NORMALIZED: Dict[str, str] = {}
@@ -75,7 +78,7 @@ async def fetch_market_ids() -> Dict[str, int]:
     Endpoint: GET /api/v1/orderBooks
     Response: { "code": 200, "order_books": [{ "symbol": "BTC", "market_id": 1, "market_type": "perp", ... }] }
     """
-    global SYMBOL_TO_MARKET_ID, MARKET_ID_TO_SYMBOL, LIGHTER_SYM_TO_NORMALIZED
+    global SYMBOL_TO_MARKET_ID, MARKET_ID_TO_SYMBOL, LIGHTER_SYM_TO_NORMALIZED, MARKET_META
 
     url = f"{BASE_URL}/api/v1/orderBooks"
     try:
@@ -113,6 +116,13 @@ async def fetch_market_ids() -> Dict[str, int]:
                     MARKET_ID_TO_SYMBOL[mid] = normalized
                     LIGHTER_SYM_TO_NORMALIZED[lighter_sym.upper()] = normalized
 
+                    # Store scaling metadata for order placement
+                    MARKET_META[normalized] = {
+                        "size_decimals": int(m.get("supported_size_decimals", 4)),
+                        "price_decimals": int(m.get("supported_price_decimals", 2)),
+                        "min_base_amount": float(m.get("min_base_amount", 0)),
+                    }
+
                 log.info(
                     "lighter_markets_loaded",
                     count=len(SYMBOL_TO_MARKET_ID),
@@ -127,12 +137,38 @@ async def fetch_market_ids() -> Dict[str, int]:
 
 
 def _use_fallback():
-    """Fallback mapping based on verified data (2026-03-01)."""
-    global SYMBOL_TO_MARKET_ID, MARKET_ID_TO_SYMBOL, LIGHTER_SYM_TO_NORMALIZED
+    """Fallback mapping based on verified data (2026-03-01).
+    Includes all 9 dashboard symbols + their scaling metadata."""
+    global SYMBOL_TO_MARKET_ID, MARKET_ID_TO_SYMBOL, LIGHTER_SYM_TO_NORMALIZED, MARKET_META
     log.warning("lighter_using_fallback_market_ids")
-    SYMBOL_TO_MARKET_ID = {"ETHUSDT": 0, "BTCUSDT": 1, "SOLUSDT": 2, "DOGEUSDT": 3}
-    MARKET_ID_TO_SYMBOL = {0: "ETHUSDT", 1: "BTCUSDT", 2: "SOLUSDT", 3: "DOGEUSDT"}
-    LIGHTER_SYM_TO_NORMALIZED = {"ETH": "ETHUSDT", "BTC": "BTCUSDT", "SOL": "SOLUSDT", "DOGE": "DOGEUSDT"}
+
+    _FALLBACK = {
+        # symbol:       (market_id, size_dec, price_dec, min_base, lighter_sym)
+        "ETHUSDT":      (0,   4, 2, 0.005,   "ETH"),
+        "BTCUSDT":      (1,   5, 1, 0.0002,  "BTC"),
+        "SOLUSDT":      (2,   3, 3, 0.05,    "SOL"),
+        "DOGEUSDT":     (3,   0, 6, 10,      "DOGE"),
+        "XRPUSDT":      (7,   0, 6, 20,      "XRP"),
+        "LINKUSDT":     (8,   1, 5, 1.0,     "LINK"),
+        "AVAXUSDT":     (9,   2, 4, 0.5,     "AVAX"),
+        "SUIUSDT":      (16,  1, 5, 3.0,     "SUI"),
+        "XAUUSDT":      (92,  4, 2, 0.003,   "XAU"),
+    }
+
+    SYMBOL_TO_MARKET_ID = {}
+    MARKET_ID_TO_SYMBOL = {}
+    LIGHTER_SYM_TO_NORMALIZED = {}
+    MARKET_META = {}
+
+    for sym, (mid, s_dec, p_dec, min_b, l_sym) in _FALLBACK.items():
+        SYMBOL_TO_MARKET_ID[sym] = mid
+        MARKET_ID_TO_SYMBOL[mid] = sym
+        LIGHTER_SYM_TO_NORMALIZED[l_sym] = sym
+        MARKET_META[sym] = {
+            "size_decimals": s_dec,
+            "price_decimals": p_dec,
+            "min_base_amount": min_b,
+        }
 
 
 def _resolve_symbol(symbol: str) -> str:
@@ -203,62 +239,80 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
         return None
 
 
+# --- Funding rate cache (fetch once, use for all symbols) ---
+_funding_cache: Dict[int, Dict] = {}  # market_id -> rate record
+_funding_cache_ts: float = 0.0
+_FUNDING_CACHE_TTL_S = 60.0  # refresh every 60s (avoids rate limits)
+
+
+async def _refresh_funding_cache():
+    """Fetch all funding rates once and cache them. Called at most once per TTL."""
+    global _funding_cache, _funding_cache_ts
+
+    now = time.time()
+    if now - _funding_cache_ts < _FUNDING_CACHE_TTL_S and _funding_cache:
+        return  # Cache still fresh
+
+    url = f"{BASE_URL}/api/v1/funding-rates"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    log.error("lighter_funding_http_error", status=resp.status)
+                    return
+
+                data = await resp.json()
+                rates = data.get("funding_rates", [])
+                if not rates:
+                    return
+
+                # Index lighter rates by market_id
+                new_cache: Dict[int, Dict] = {}
+                for r in rates:
+                    if r.get("exchange") == "lighter":
+                        mid = r.get("market_id")
+                        if mid is not None:
+                            new_cache[mid] = r
+
+                _funding_cache = new_cache
+                _funding_cache_ts = now
+                log.info("lighter_funding_cache_refreshed", count=len(new_cache))
+
+    except Exception as e:
+        log.error("lighter_funding_cache_exception", error=str(e))
+
+
 async def fetch_funding_rate(symbol: str) -> Optional[FundingSnapshot]:
     """
-    Fetch funding rate from Lighter cross-exchange funding endpoint.
-    Endpoint: GET /api/v1/funding-rates
-    Response: {
-      "code": 200,
-      "funding_rates": [
-        {"market_id": 1, "exchange": "lighter", "symbol": "BTC", "rate": 0.00012},
-        {"market_id": 1, "exchange": "bybit", "symbol": "BTC", "rate": 0.00015},
-        ...
-      ]
-    }
-    We filter for exchange="lighter" and matching symbol.
+    Get funding rate for a symbol from the cached funding data.
+    The cache is refreshed at most once per 60 seconds to avoid rate limits.
     """
     lighter_symbol = _resolve_symbol(symbol)
     market_id = SYMBOL_TO_MARKET_ID.get(lighter_symbol)
     if market_id is None:
         return None
 
-    url = f"{BASE_URL}/api/v1/funding-rates"
+    # Ensure cache is fresh
+    await _refresh_funding_cache()
+
+    lighter_rate = _funding_cache.get(market_id)
+    if lighter_rate is None:
+        return None
+
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                if resp.status != 200:
-                    log.error("lighter_funding_http_error", status=resp.status)
-                    return None
+        rate = float(lighter_rate["rate"])
+        interval_hours = 1.0
 
-                data = await resp.json()
-                rates = data.get("funding_rates", [])
-
-                # Find the lighter rate for our market_id
-                lighter_rate = None
-                for r in rates:
-                    if r.get("exchange") == "lighter" and r.get("market_id") == market_id:
-                        lighter_rate = r
-                        break
-
-                if lighter_rate is None:
-                    log.debug("lighter_no_funding_for_market", symbol=symbol, market_id=market_id)
-                    return None
-
-                rate = float(lighter_rate["rate"])
-                # Lighter funding interval: assumed 1h (ต้องตรวจสอบจาก docs ถ้าเปลี่ยน)
-                interval_hours = 1.0
-
-                return FundingSnapshot(
-                    ts=time.time() * 1000,
-                    exchange="lighter",
-                    symbol=symbol,
-                    funding_rate=rate,
-                    predicted_rate=None,
-                    next_funding_time=None,
-                    funding_interval_hours=interval_hours,
-                    annualized_rate=rate * (365 * 24 / interval_hours),
-                )
-
+        return FundingSnapshot(
+            ts=time.time() * 1000,
+            exchange="lighter",
+            symbol=symbol,
+            funding_rate=rate,
+            predicted_rate=None,
+            next_funding_time=None,
+            funding_interval_hours=interval_hours,
+            annualized_rate=rate * (365 * 24 / interval_hours),
+        )
     except Exception as e:
-        log.error("lighter_funding_exception", symbol=symbol, error=str(e))
+        log.error("lighter_funding_parse_error", symbol=symbol, error=str(e))
         return None

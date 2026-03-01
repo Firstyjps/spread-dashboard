@@ -27,8 +27,26 @@ const TIME_RANGES = [
 
 type TimeRange = (typeof TIME_RANGES)[number];
 
+const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
+
 export function SpreadChart({ symbol }: Props) {
   const [selectedRange, setSelectedRange] = useState<TimeRange>(TIME_RANGES[1]); // default 5m
+  const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
+
+  const toggleLine = (dataKey: string) => {
+    setHiddenLines((prev) => {
+      const next = new Set(prev);
+      if (next.has(dataKey)) {
+        next.delete(dataKey);
+      } else {
+        // Don't allow hiding ALL lines
+        if (next.size < LINE_KEYS.length - 1) {
+          next.add(dataKey);
+        }
+      }
+      return next;
+    });
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['spreads', symbol, selectedRange.label],
@@ -124,7 +142,20 @@ export function SpreadChart({ symbol }: Props) {
                   }}
                   labelStyle={{ color: '#9ca3af' }}
                 />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend
+                  wrapperStyle={{ fontSize: 11, cursor: 'pointer' }}
+                  onClick={(e: any) => {
+                    if (e?.dataKey) toggleLine(e.dataKey);
+                  }}
+                  formatter={(value: string, entry: any) => (
+                    <span style={{
+                      color: hiddenLines.has(entry.dataKey) ? '#4b5563' : entry.color,
+                      textDecoration: hiddenLines.has(entry.dataKey) ? 'line-through' : 'none',
+                    }}>
+                      {value}
+                    </span>
+                  )}
+                />
                 <ReferenceLine y={0} stroke="#4b5563" strokeDasharray="3 3" />
                 <Line
                   type="monotone"
@@ -134,6 +165,7 @@ export function SpreadChart({ symbol }: Props) {
                   dot={false}
                   name="Mid Spread"
                   isAnimationActive={false}
+                  hide={hiddenLines.has('mid_spread')}
                 />
                 <Line
                   type="monotone"
@@ -143,6 +175,7 @@ export function SpreadChart({ symbol }: Props) {
                   dot={false}
                   name="Long Spread"
                   isAnimationActive={false}
+                  hide={hiddenLines.has('long_spread')}
                 />
                 <Line
                   type="monotone"
@@ -152,6 +185,7 @@ export function SpreadChart({ symbol }: Props) {
                   dot={false}
                   name="Short Spread"
                   isAnimationActive={false}
+                  hide={hiddenLines.has('short_spread')}
                 />
               </LineChart>
             </ResponsiveContainer>

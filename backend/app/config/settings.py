@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Polling
     poll_interval_ms: int = 2000
 
+    # CORS (comma-separated origins, default: localhost dev servers)
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
     # Cross-exchange symbol aliases (format: "DASHBOARD_SYM:LIGHTER_SYM,...")
     # When symbols differ between exchanges, map dashboard symbol to Lighter symbol
     # e.g., "XAUTUSDT:XAUUSDT" means: dashboard uses XAUTUSDT, Lighter uses XAUUSDT (market: XAU)

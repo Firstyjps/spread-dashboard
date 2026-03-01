@@ -2,10 +2,10 @@ import asyncio
 import lighter
 import eth_account
 
-L1_PRIVATE_KEY = "YOUR_L1_MASTER_KEY_HERE"
-ACCOUNT_INDEX = "YOUR_ACCOUNT_INDEX_HERE"
-API_KEY_INDEX = 3
-BASE_URL = "https://mainnet.zklighter.elliot.ai"
+L1_PRIVATE_KEY = ""
+ACCOUNT_INDEX = ""
+API_KEY_INDEX = 2
+BASE_URL = "https://mainnet.zklighter.elliot.ai/"
 
 async def main():
     l2_private_key, l2_public_key, err = lighter.create_api_key()

@@ -3,6 +3,7 @@ REST API routes for the Spread Dashboard.
 """
 import csv
 import io
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
@@ -14,6 +15,8 @@ from app.storage.database import get_recent_spreads, get_spreads_by_time, get_re
 from app.config import settings
 from app.execution import TradeRequest
 from app.services.executor import ArbitrageExecutor
+
+log = structlog.get_logger()
 
 router = APIRouter(prefix="/api/v1")
 
@@ -130,34 +133,57 @@ async def config():
         "latency_warning_ms": settings.latency_warning_ms,
     }
 
+# --- Side mapping: frontend → executor ---
+SIDE_MAP = {
+    "LONG_LIGHTER": "BUY_LIGHTER_SELL_BYBIT",
+    "SHORT_LIGHTER": "SELL_LIGHTER_BUY_BYBIT",
+}
+
+
+@router.get("/positions")
+async def get_positions(symbol: str = "BTCUSDT"):
+    """Get current positions on both exchanges for a symbol."""
+    try:
+        executor = ArbitrageExecutor(settings)
+        bybit_pos = await executor.bybit.get_position(symbol)
+        lighter_pos = await executor.lighter.get_position(symbol)
+        return {"symbol": symbol, "bybit": bybit_pos, "lighter": lighter_pos}
+    except Exception as e:
+        log.error("get_positions_error", symbol=symbol, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/execute")
 async def execute_trade(req: TradeRequest):
     executor = ArbitrageExecutor(settings)
-    
+    mapped_side = SIDE_MAP.get(req.side, req.side)
+
     try:
-        results = await executor.run_arb(req.symbol, req.side, req.amount)
-        
+        results = await executor.run_arb(req.symbol, mapped_side, req.amount)
+
         for res in results:
             if isinstance(res, Exception):
                 raise HTTPException(status_code=500, detail=f"Execution Failed: {str(res)}")
-                
+
         return {
-            "status": "success", 
-            "detail": f"Atomic Arb triggered for {req.symbol}",
-            "results": str(results)
+            "status": "success",
+            "detail": f"Atomic Arb triggered for {req.symbol} ({mapped_side}, qty={req.amount})",
+            "results": str(results),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
 class ClosePositionRequest(BaseModel):
     symbol: str
+
 
 @router.post("/execute/close_all")
 async def close_all_positions(req: ClosePositionRequest):
     try:
-        executor = ArbitrageExecutor(settings) 
-        
+        executor = ArbitrageExecutor(settings)
         result = await executor.emergency_close_auto(symbol=req.symbol)
         return result
     except Exception as e:
-        print(f"[Close All Error]: {str(e)}") 
+        log.error("close_all_error", symbol=req.symbol, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
