@@ -48,6 +48,9 @@ export function OverviewPage({ data }: Props) {
             const zs = d?.zscore != null ? d.zscore.toFixed(2) : '-';
             const baBybit = spread ? (spread.bid_ask_spread_bybit * 10000).toFixed(2) : '-';
             const baLighter = spread ? (spread.bid_ask_spread_lighter * 10000).toFixed(2) : '-';
+            const basisBps = spread?.basis_bybit_bps != null ? spread.basis_bybit_bps.toFixed(2) : '-';
+            const latBybit = d?.latency_bybit != null ? Math.round(d.latency_bybit) : null;
+            const latLighter = d?.latency_lighter != null ? Math.round(d.latency_lighter) : null;
             const isPositive = spread && spread.exchange_spread_mid > 0;
 
             return (
@@ -93,7 +96,7 @@ export function OverviewPage({ data }: Props) {
                 </div>
 
                 {/* Metrics row */}
-                <div className="grid grid-cols-4 gap-2 text-xs">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
                   <div>
                     <span className="text-gray-500">Long</span>
                     <div className="font-mono text-gray-300">{longBps} bps</div>
@@ -107,9 +110,22 @@ export function OverviewPage({ data }: Props) {
                     <div className="font-mono text-gray-300">{zs}</div>
                   </div>
                   <div>
+                    <span className="text-gray-500">Basis</span>
+                    <div className="font-mono text-gray-300">{basisBps} bps</div>
+                  </div>
+                  <div>
                     <span className="text-gray-500">BA Spread</span>
                     <div className="font-mono text-gray-300">
                       B:{baBybit} / L:{baLighter}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Latency</span>
+                    <div className="font-mono text-gray-300">
+                      {latBybit != null ? `B:${latBybit}` : 'B:-'}
+                      {' / '}
+                      {latLighter != null ? `L:${latLighter}` : 'L:-'}
+                      <span className="text-gray-600"> ms</span>
                     </div>
                   </div>
                 </div>

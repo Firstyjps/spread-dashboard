@@ -1,6 +1,6 @@
 # file: backend/app/config/settings.py
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import Dict, List
 import os
 
 
@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     # Polling
     poll_interval_ms: int = 2000
 
+    # Cross-exchange symbol aliases (format: "DASHBOARD_SYM:LIGHTER_SYM,...")
+    # When symbols differ between exchanges, map dashboard symbol to Lighter symbol
+    # e.g., "XAUTUSDT:XAUUSDT" means: dashboard uses XAUTUSDT, Lighter uses XAUUSDT (market: XAU)
+    lighter_symbol_map: str = "XAUTUSDT:XAUUSDT"
+
     @property
     def symbol_list(self) -> List[str]:
         return [s.strip() for s in self.symbols.split(",") if s.strip()]
@@ -44,6 +49,19 @@ class Settings(BaseSettings):
     @property
     def poll_interval_seconds(self) -> float:
         return self.poll_interval_ms / 1000.0
+
+    @property
+    def lighter_aliases(self) -> Dict[str, str]:
+        """Parse LIGHTER_SYMBOL_MAP into dict: {dashboard_sym: lighter_sym}."""
+        result = {}
+        if not self.lighter_symbol_map:
+            return result
+        for pair in self.lighter_symbol_map.split(","):
+            pair = pair.strip()
+            if ":" in pair:
+                dashboard_sym, lighter_sym = pair.split(":", 1)
+                result[dashboard_sym.strip()] = lighter_sym.strip()
+        return result
 
     class Config:
         env_file = ".env"

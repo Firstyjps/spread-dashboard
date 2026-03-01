@@ -135,6 +135,12 @@ def _use_fallback():
     LIGHTER_SYM_TO_NORMALIZED = {"ETH": "ETHUSDT", "BTC": "BTCUSDT", "SOL": "SOLUSDT", "DOGE": "DOGEUSDT"}
 
 
+def _resolve_symbol(symbol: str) -> str:
+    """Resolve dashboard symbol to Lighter symbol via alias map.
+    e.g., XAUTUSDT -> XAUUSDT (because Lighter uses XAU, not XAUT)."""
+    return settings.lighter_aliases.get(symbol, symbol)
+
+
 async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
     """
     Fetch best bid/ask from Lighter orderbook.
@@ -146,9 +152,11 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
     }
     Asks are sorted lowest first, bids are sorted highest first.
     """
-    market_id = SYMBOL_TO_MARKET_ID.get(symbol)
+    lighter_symbol = _resolve_symbol(symbol)
+    market_id = SYMBOL_TO_MARKET_ID.get(lighter_symbol)
     if market_id is None:
-        log.warning("lighter_unknown_symbol", symbol=symbol, available=list(SYMBOL_TO_MARKET_ID.keys()))
+        log.warning("lighter_unknown_symbol", symbol=symbol, lighter_symbol=lighter_symbol,
+                     available=list(SYMBOL_TO_MARKET_ID.keys())[:10])
         return None
 
     url = f"{BASE_URL}/api/v1/orderBookOrders"
@@ -209,7 +217,8 @@ async def fetch_funding_rate(symbol: str) -> Optional[FundingSnapshot]:
     }
     We filter for exchange="lighter" and matching symbol.
     """
-    market_id = SYMBOL_TO_MARKET_ID.get(symbol)
+    lighter_symbol = _resolve_symbol(symbol)
+    market_id = SYMBOL_TO_MARKET_ID.get(lighter_symbol)
     if market_id is None:
         return None
 

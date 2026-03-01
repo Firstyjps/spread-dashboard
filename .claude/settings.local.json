@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:apidocs.lighter.xyz)",
+      "WebFetch(domain:docs.lighter.xyz)",
+      "WebFetch(domain:bybit-exchange.github.io)",
+      "Bash(python3 -m pip install -r requirements.txt --quiet)",
+      "Bash(npm install)",
+      "Bash(pip3 --version)"
+    ]
+  }
+}

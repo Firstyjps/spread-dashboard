@@ -1,6 +1,7 @@
 # file: backend/app/storage/database.py
 import aiosqlite
 import os
+import time
 import structlog
 from app.config import settings
 from app.models import NormalizedTick, FundingSnapshot, SpreadMetric, Alert
@@ -84,6 +85,16 @@ async def init_db():
             );
         """)
         await db.commit()
+
+        # Migration: add new columns if they don't exist (safe for existing DBs)
+        for col, col_type in [("basis_bybit", "REAL"), ("basis_bybit_bps", "REAL")]:
+            try:
+                await db.execute(f"ALTER TABLE spread_metrics ADD COLUMN {col} {col_type}")
+                await db.commit()
+                log.info("db_column_added", table="spread_metrics", column=col)
+            except Exception:
+                pass  # Column already exists
+
     log.info("database_initialized", path=DB_PATH)
 
 
@@ -110,13 +121,14 @@ async def insert_spread(spread: SpreadMetric):
                (ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
                 lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
                 short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
-                funding_diff, received_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                basis_bybit, basis_bybit_bps, funding_diff, received_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (spread.ts, spread.symbol, spread.bybit_mid, spread.lighter_mid,
              spread.bybit_bid, spread.bybit_ask, spread.lighter_bid,
              spread.lighter_ask, spread.exchange_spread_mid, spread.long_spread,
              spread.short_spread, spread.bid_ask_spread_bybit,
-             spread.bid_ask_spread_lighter, spread.funding_diff,
+             spread.bid_ask_spread_lighter, spread.basis_bybit,
+             spread.basis_bybit_bps, spread.funding_diff,
              spread.received_at),
         )
         await db.commit()
@@ -143,6 +155,20 @@ async def get_recent_spreads(symbol: str, limit: int = 500):
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in reversed(rows)]
+
+
+async def get_spreads_by_time(symbol: str, minutes: int = 5):
+    """Get spread data for the last N minutes."""
+    since_ts = (time.time() - minutes * 60) * 1000
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT * FROM spread_metrics
+               WHERE symbol = ? AND ts > ? ORDER BY ts ASC""",
+            (symbol, since_ts),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
 
 
 async def get_recent_alerts(limit: int = 50):

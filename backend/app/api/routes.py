@@ -2,11 +2,14 @@
 """
 REST API routes for the Spread Dashboard.
 """
+import csv
+import io
 from fastapi import APIRouter, Query
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from app.analytics.spread_engine import get_all_current_data, get_latest_tick, compute_spread, compute_zscore
 from app.collectors import bybit_collector, lighter_collector
-from app.storage.database import get_recent_spreads, get_recent_alerts
+from app.storage.database import get_recent_spreads, get_spreads_by_time, get_recent_alerts
 from app.config import settings
 
 router = APIRouter(prefix="/api/v1")
@@ -34,17 +37,59 @@ async def prices():
 
 
 @router.get("/spreads")
-async def spreads(symbol: str = "BTCUSDT", limit: int = Query(default=500, le=5000)):
-    """Current and historical spread data."""
+async def spreads(
+    symbol: str = "BTCUSDT",
+    limit: int = Query(default=500, le=5000),
+    minutes: Optional[int] = Query(default=None, le=1440),
+):
+    """
+    Current and historical spread data.
+    Use `minutes` param to get time-based data (e.g., minutes=5 for last 5 min).
+    Falls back to `limit` if `minutes` is not specified.
+    """
     current = compute_spread(symbol)
     zscore = compute_zscore(symbol)
-    history = await get_recent_spreads(symbol, limit)
+    if minutes is not None:
+        history = await get_spreads_by_time(symbol, minutes)
+    else:
+        history = await get_recent_spreads(symbol, limit)
     return {
         "symbol": symbol,
         "current": current.model_dump() if current else None,
         "zscore": zscore,
         "history": history,
+        "count": len(history),
     }
+
+
+@router.get("/spreads/export")
+async def export_spreads_csv(
+    symbol: str = "BTCUSDT",
+    minutes: int = Query(default=60, le=1440),
+):
+    """Export spread history as CSV file."""
+    rows = await get_spreads_by_time(symbol, minutes)
+
+    output = io.StringIO()
+    if rows:
+        fieldnames = [
+            "ts", "symbol", "bybit_mid", "lighter_mid",
+            "exchange_spread_mid", "long_spread", "short_spread",
+            "bid_ask_spread_bybit", "bid_ask_spread_lighter",
+            "basis_bybit_bps",
+        ]
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+    output.seek(0)
+    filename = f"spread_{symbol}_{minutes}m.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/funding")

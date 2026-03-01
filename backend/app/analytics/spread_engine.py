@@ -58,6 +58,14 @@ def compute_spread(symbol: str) -> Optional[SpreadMetric]:
     ba_bybit = (bybit.ask - bybit.bid) / bybit.mid
     ba_lighter = (lighter.ask - lighter.bid) / lighter.mid
 
+    # Basis calculation: (mark_price - index_price) / index_price
+    # Only Bybit provides mark/index prices for perps
+    basis_bybit = None
+    basis_bybit_bps = None
+    if bybit.mark_price and bybit.index_price and bybit.index_price > 0:
+        basis_bybit = (bybit.mark_price - bybit.index_price) / bybit.index_price
+        basis_bybit_bps = round(basis_bybit * 10000, 2)
+
     metric = SpreadMetric(
         ts=now,
         symbol=symbol,
@@ -72,6 +80,8 @@ def compute_spread(symbol: str) -> Optional[SpreadMetric]:
         short_spread=short_spread,
         bid_ask_spread_bybit=ba_bybit,
         bid_ask_spread_lighter=ba_lighter,
+        basis_bybit=basis_bybit,
+        basis_bybit_bps=basis_bybit_bps,
         received_at=now,
     )
 
@@ -130,6 +140,8 @@ def get_all_current_data() -> Dict:
             "zscore": zscore,
             "imbalance_bybit": compute_imbalance(bybit) if bybit else None,
             "imbalance_lighter": compute_imbalance(lighter) if lighter else None,
+            "latency_bybit": bybit.latency_ms if bybit else None,
+            "latency_lighter": lighter.latency_ms if lighter else None,
         }
 
     return result
