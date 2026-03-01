@@ -1,16 +1,19 @@
-# file: backend/app/api/routes.py
 """
 REST API routes for the Spread Dashboard.
 """
 import csv
 import io
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
+
+from pydantic import BaseModel
 from app.analytics.spread_engine import get_all_current_data, get_latest_tick, compute_spread, compute_zscore
 from app.collectors import bybit_collector, lighter_collector
 from app.storage.database import get_recent_spreads, get_spreads_by_time, get_recent_alerts
 from app.config import settings
+from app.execution import TradeRequest
+from app.services.executor import ArbitrageExecutor
 
 router = APIRouter(prefix="/api/v1")
 
@@ -126,3 +129,35 @@ async def config():
         "stale_feed_timeout_s": settings.stale_feed_timeout_s,
         "latency_warning_ms": settings.latency_warning_ms,
     }
+
+@router.post("/execute")
+async def execute_trade(req: TradeRequest):
+    executor = ArbitrageExecutor(settings)
+    
+    try:
+        results = await executor.run_arb(req.symbol, req.side, req.amount)
+        
+        for res in results:
+            if isinstance(res, Exception):
+                raise HTTPException(status_code=500, detail=f"Execution Failed: {str(res)}")
+                
+        return {
+            "status": "success", 
+            "detail": f"Atomic Arb triggered for {req.symbol}",
+            "results": str(results)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+class ClosePositionRequest(BaseModel):
+    symbol: str
+
+@router.post("/execute/close_all")
+async def close_all_positions(req: ClosePositionRequest):
+    try:
+        executor = ArbitrageExecutor(settings) 
+        
+        result = await executor.emergency_close_auto(symbol=req.symbol)
+        return result
+    except Exception as e:
+        print(f"[Close All Error]: {str(e)}") 
+        raise HTTPException(status_code=500, detail=str(e))
