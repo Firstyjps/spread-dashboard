@@ -16,6 +16,10 @@ aiosqlite==0.20.0
 python-dotenv==1.0.1
 structlog==24.4.0
 
+# backend/requirements.txt
+pybit>=5.0.0
+eth-account
+git+https://github.com/elliottech/lighter-python.git
 # Future production dependencies (uncomment when needed):
 # asyncpg==0.30.0
 # redis[hiredis]==5.2.1
