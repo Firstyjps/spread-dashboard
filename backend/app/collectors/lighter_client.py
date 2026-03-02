@@ -30,50 +30,62 @@ class LighterClient:
             self.client = None
 
     async def get_position(self, symbol: str) -> dict:
-        """Get Lighter position via REST API.
-
-        Uses GET /api/v1/account?by=index&value={account_index}
-        Returns: {amount, is_long, entry_price, pnl}
-        """
         try:
             lighter_symbol = self.config.lighter_aliases.get(symbol, symbol)
-            market_id = SYMBOL_TO_MARKET_ID.get(lighter_symbol)
-
-            if market_id is None:
-                log.warning("lighter_market_id_not_found", symbol=lighter_symbol)
-                return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
+            expected_market_id = SYMBOL_TO_MARKET_ID.get(lighter_symbol)
 
             url = f"{self.base_url}/api/v1/account"
             params = {"by": "index", "value": str(self.config.lighter_account_index)}
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                async with session.get(url, params=params, timeout=10) as resp:
                     if resp.status != 200:
-                        log.error("lighter_account_api_error", status=resp.status)
                         return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
                     data = await resp.json()
 
-            # Parse position from account data
-            positions = data.get("positions", {})
-            pos = positions.get(str(market_id), {})
+            accounts = data.get("accounts", [])
+            if not accounts:
+                return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
+                
+            positions = accounts[0].get("positions", [])
 
-            size_str = pos.get("position", "0")
-            size = float(size_str) if size_str else 0.0
+            pos = {}
+            for p in positions:
+                p_market_id = int(p.get("market_id", -1))
+                p_symbol = p.get("symbol", "")
 
-            entry_str = pos.get("avg_entry_price", "0")
-            entry_price = float(entry_str) if entry_str else 0.0
+                if (expected_market_id is not None and p_market_id == int(expected_market_id)) or \
+                    (p_symbol and p_symbol.upper() in lighter_symbol.upper()):
+                    pos = p
+                    break
 
-            pnl_str = pos.get("unrealized_pnl", "0")
-            pnl = float(pnl_str) if pnl_str else 0.0
+            if not pos:
+                return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
+
+            raw_size = float(pos.get("position", "0"))
+            
+            if raw_size == 0:
+                return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
+
+            sign = pos.get("sign", 1)
+            is_long = (sign == 1)
+            
+            if raw_size < 0:
+                is_long = False
+                raw_size = abs(raw_size)
+
+            entry_price = float(pos.get("avg_entry_price", "0"))
+            pnl = float(pos.get("unrealized_pnl", "0"))
 
             return {
-                "amount": abs(size),
-                "is_long": size > 0,
+                "amount": raw_size,
+                "is_long": is_long,
                 "entry_price": entry_price,
                 "pnl": pnl,
             }
+
         except Exception as e:
-            log.error("lighter_get_position_error", symbol=symbol, error=str(e))
+            log.error("lighter_get_position_crash", symbol=symbol, error=str(e))
             return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
 
     async def place_market_order(self, symbol: str, amount: float, is_ask: bool, reduce_only: bool = False):
