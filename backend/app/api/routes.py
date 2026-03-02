@@ -8,13 +8,16 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
 
+from decimal import Decimal
 from pydantic import BaseModel
 from app.analytics.spread_engine import get_all_current_data, get_latest_tick, compute_spread, compute_zscore
 from app.collectors import bybit_collector, lighter_collector
+from app.collectors.bybit_client import BybitClient
 from app.storage.database import get_recent_spreads, get_spreads_by_time, get_recent_alerts
 from app.config import settings
 from app.execution import TradeRequest
 from app.services.executor import ArbitrageExecutor
+from app.execution.maker_engine import smart_execute_maker, MakerConfig
 
 log = structlog.get_logger()
 
@@ -186,4 +189,45 @@ async def close_all_positions(req: ClosePositionRequest):
         return result
     except Exception as e:
         log.error("close_all_error", symbol=req.symbol, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class MakerTestRequest(BaseModel):
+    symbol: str = "XAUTUSDT"
+    side: str = "Buy"
+    qty: float = 0.001
+
+
+@router.post("/execute/maker_test")
+async def test_maker_engine(req: MakerTestRequest):
+    """Test maker engine on Bybit only (no Lighter). For dev/testing."""
+    if req.side not in ("Buy", "Sell"):
+        raise HTTPException(status_code=400, detail="side must be 'Buy' or 'Sell'")
+
+    client = BybitClient(settings)
+    maker_cfg = MakerConfig(
+        max_time_s=settings.maker_max_time_s,
+        reprice_interval_ms=settings.maker_reprice_interval_ms,
+        max_reprices=settings.maker_max_reprices,
+        aggressiveness=settings.maker_aggressiveness,
+        allow_market_fallback=settings.maker_allow_market_fallback,
+        maker_fee_rate=settings.maker_fee_rate,
+        taker_fee_rate=settings.taker_fee_rate,
+        spread_guard_ticks=settings.maker_spread_guard_ticks,
+        vol_window=settings.maker_vol_window,
+        vol_limit_ticks=settings.maker_vol_limit_ticks,
+        max_deviation_ticks=settings.maker_max_deviation_ticks,
+    )
+
+    try:
+        result = await smart_execute_maker(
+            client=client,
+            symbol=req.symbol,
+            side=req.side,
+            target_qty=Decimal(str(req.qty)),
+            config=maker_cfg,
+        )
+        return result.to_dict()
+    except Exception as e:
+        log.error("maker_test_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))

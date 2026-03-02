@@ -3,14 +3,29 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface UseWebSocketOptions {
   url: string;
-  onMessage?: (data: any) => void;
-  reconnectInterval?: number;
+  onMessage?: (data: unknown) => void;
+  autoSubscribe?: string[];
 }
 
-export function useWebSocket({ url, onMessage, reconnectInterval = 3000 }: UseWebSocketOptions) {
+export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const send = useCallback((data: string | object) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(typeof data === 'string' ? data : JSON.stringify(data));
+    }
+  }, []);
+
+  const subscribe = useCallback((symbols: string[]) => {
+    send({ type: 'subscribe', symbols });
+  }, [send]);
+
+  const unsubscribe = useCallback((symbols: string[]) => {
+    send({ type: 'unsubscribe', symbols });
+  }, [send]);
 
   const connect = useCallback(() => {
     try {
@@ -19,6 +34,10 @@ export function useWebSocket({ url, onMessage, reconnectInterval = 3000 }: UseWe
 
       ws.onopen = () => {
         setIsConnected(true);
+        // Auto-subscribe on connection if symbols specified
+        if (autoSubscribe && autoSubscribe.length > 0) {
+          ws.send(JSON.stringify({ type: 'subscribe', symbols: autoSubscribe }));
+        }
       };
 
       ws.onmessage = (event) => {
@@ -32,16 +51,16 @@ export function useWebSocket({ url, onMessage, reconnectInterval = 3000 }: UseWe
 
       ws.onclose = () => {
         setIsConnected(false);
-        reconnectTimer.current = setTimeout(connect, reconnectInterval);
+        reconnectTimer.current = setTimeout(connect, 3000);
       };
 
       ws.onerror = () => {
         ws.close();
       };
     } catch {
-      reconnectTimer.current = setTimeout(connect, reconnectInterval);
+      reconnectTimer.current = setTimeout(connect, 3000);
     }
-  }, [url, onMessage, reconnectInterval]);
+  }, [url, onMessage, autoSubscribe]);
 
   useEffect(() => {
     connect();
@@ -51,5 +70,5 @@ export function useWebSocket({ url, onMessage, reconnectInterval = 3000 }: UseWe
     };
   }, [connect]);
 
-  return { isConnected };
+  return { isConnected, send, subscribe, unsubscribe };
 }

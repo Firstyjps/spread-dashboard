@@ -40,6 +40,19 @@ class Settings(BaseSettings):
     # CORS (comma-separated origins, default: localhost dev servers)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Maker Engine (Bybit PostOnly LIMIT execution)
+    maker_max_time_s: float = 15.0
+    maker_reprice_interval_ms: int = 800
+    maker_max_reprices: int = 8
+    maker_aggressiveness: str = "BALANCED"
+    maker_allow_market_fallback: bool = True
+    maker_fee_rate: float = 0.0002
+    taker_fee_rate: float = 0.00055
+    maker_spread_guard_ticks: int = 1
+    maker_vol_window: int = 20
+    maker_vol_limit_ticks: int = 10
+    maker_max_deviation_ticks: int = 50
+
     # Cross-exchange symbol aliases (format: "DASHBOARD_SYM:LIGHTER_SYM,...")
     # When symbols differ between exchanges, map dashboard symbol to Lighter symbol
     # e.g., "XAUTUSDT:XAUUSDT" means: dashboard uses XAUTUSDT, Lighter uses XAUUSDT (market: XAU)

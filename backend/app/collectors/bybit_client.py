@@ -4,6 +4,7 @@ Uses asyncio.to_thread() to wrap pybit's synchronous HTTP calls.
 """
 import asyncio
 import structlog
+from decimal import Decimal
 from pybit.unified_trading import HTTP
 
 log = structlog.get_logger()
@@ -91,4 +92,144 @@ class BybitClient:
             return {"status": "success", "order_id": order_id, "response": response}
         except Exception as e:
             log.error("bybit_order_error", symbol=symbol, error=str(e))
+            raise
+
+    # --- Maker Engine Methods ---
+
+    async def get_instrument_info(self, symbol: str, category: str = "linear") -> dict:
+        """Fetch instrument constraints: tickSize, qtyStep, min/max qty."""
+        try:
+            resp = await asyncio.to_thread(
+                self.session.get_instruments_info, category=category, symbol=symbol
+            )
+            instruments = resp.get("result", {}).get("list", [])
+            if not instruments:
+                raise Exception(f"No instrument info for {symbol}")
+
+            inst = instruments[0]
+            price_filter = inst.get("priceFilter", {})
+            lot_filter = inst.get("lotSizeFilter", {})
+
+            return {
+                "tick_size": Decimal(price_filter.get("tickSize", "0.01")),
+                "qty_step": Decimal(lot_filter.get("qtyStep", "0.001")),
+                "min_qty": Decimal(lot_filter.get("minOrderQty", "0.001")),
+                "max_qty": Decimal(lot_filter.get("maxOrderQty", "100")),
+            }
+        except Exception as e:
+            log.error("bybit_instrument_info_error", symbol=symbol, error=str(e))
+            raise
+
+    async def get_orderbook(self, symbol: str, category: str = "linear", limit: int = 25) -> dict:
+        """Fetch orderbook top N levels."""
+        try:
+            resp = await asyncio.to_thread(
+                self.session.get_orderbook, category=category, symbol=symbol, limit=limit
+            )
+            result = resp.get("result", {})
+            return {
+                "bids": result.get("b", []),  # [[price, size], ...]
+                "asks": result.get("a", []),
+                "ts": result.get("ts", 0),
+            }
+        except Exception as e:
+            log.error("bybit_orderbook_error", symbol=symbol, error=str(e))
+            raise
+
+    async def place_limit_postonly(
+        self, symbol: str, side: str, qty: str, price: str, reduce_only: bool = False
+    ) -> dict:
+        """Place a PostOnly LIMIT order (maker-only)."""
+        log.info("bybit_placing_postonly", symbol=symbol, side=side, qty=qty, price=price)
+        try:
+            resp = await asyncio.to_thread(
+                self.session.place_order,
+                category="linear",
+                symbol=symbol,
+                side=side,
+                orderType="Limit",
+                qty=qty,
+                price=price,
+                timeInForce="PostOnly",
+                reduceOnly=reduce_only,
+            )
+            ret_code = resp.get("retCode", -1)
+            ret_msg = resp.get("retMsg", "")
+
+            if ret_code != 0:
+                log.warning("bybit_postonly_rejected", retCode=ret_code, retMsg=ret_msg)
+                raise Exception(f"PostOnly rejected: {ret_msg} (code={ret_code})")
+
+            order_id = resp.get("result", {}).get("orderId", "")
+            log.info("bybit_postonly_placed", order_id=order_id)
+            return {"order_id": order_id, "status": "success"}
+        except Exception as e:
+            log.error("bybit_postonly_error", symbol=symbol, error=str(e))
+            raise
+
+    async def cancel_order(self, symbol: str, order_id: str) -> dict:
+        """Cancel an open order."""
+        try:
+            resp = await asyncio.to_thread(
+                self.session.cancel_order,
+                category="linear",
+                symbol=symbol,
+                orderId=order_id,
+            )
+            ret_code = resp.get("retCode", -1)
+            if ret_code != 0:
+                raise Exception(f"Cancel failed: {resp.get('retMsg', 'unknown')}")
+            log.info("bybit_order_cancelled", order_id=order_id)
+            return {"status": "cancelled", "order_id": order_id}
+        except Exception as e:
+            log.error("bybit_cancel_error", order_id=order_id, error=str(e))
+            raise
+
+    async def get_order_status(self, symbol: str, order_id: str) -> dict:
+        """Poll order status. Returns {status, filled_qty, avg_price, remaining_qty}."""
+        try:
+            # Try open orders first
+            resp = await asyncio.to_thread(
+                self.session.get_open_orders,
+                category="linear",
+                symbol=symbol,
+                orderId=order_id,
+            )
+            orders = resp.get("result", {}).get("list", [])
+            if orders:
+                o = orders[0]
+                filled = Decimal(o.get("cumExecQty", "0"))
+                total = Decimal(o.get("qty", "0"))
+                avg_p = o.get("avgPrice", "0")
+                return {
+                    "status": o.get("orderStatus", "Unknown"),
+                    "filled_qty": filled,
+                    "avg_price": Decimal(avg_p) if avg_p and avg_p != "0" else Decimal("0"),
+                    "remaining_qty": total - filled,
+                }
+
+            # Not in open orders → check history (filled/cancelled)
+            resp = await asyncio.to_thread(
+                self.session.get_order_history,
+                category="linear",
+                symbol=symbol,
+                orderId=order_id,
+            )
+            orders = resp.get("result", {}).get("list", [])
+            if orders:
+                o = orders[0]
+                filled = Decimal(o.get("cumExecQty", "0"))
+                total = Decimal(o.get("qty", "0"))
+                avg_p = o.get("avgPrice", "0")
+                return {
+                    "status": o.get("orderStatus", "Unknown"),
+                    "filled_qty": filled,
+                    "avg_price": Decimal(avg_p) if avg_p and avg_p != "0" else Decimal("0"),
+                    "remaining_qty": total - filled,
+                }
+
+            return {"status": "Unknown", "filled_qty": Decimal("0"),
+                    "avg_price": Decimal("0"), "remaining_qty": Decimal("0")}
+        except Exception as e:
+            log.error("bybit_order_status_error", order_id=order_id, error=str(e))
             raise

@@ -23,7 +23,9 @@ from app.storage.database import init_db, insert_tick, insert_spread, cleanup_ol
 log = structlog.get_logger()
 
 # --- Connected WebSocket clients ---
-ws_clients: set[WebSocket] = set()
+# Maps each WebSocket to its subscribed symbols.
+# None means "subscribe to all" (backward compatible default).
+ws_clients: dict[WebSocket, set[str] | None] = {}
 
 # --- Background task handle ---
 _poll_task: asyncio.Task | None = None
@@ -70,17 +72,23 @@ async def poll_loop():
                 if spread:
                     await insert_spread(spread)
 
-            # Broadcast to all connected WS clients
+            # Broadcast to connected WS clients (filtered by subscription)
             if ws_clients:
-                data = get_all_current_data()
-                message = json.dumps({"type": "update", "data": data, "ts": time.time() * 1000})
-                disconnected = set()
-                for ws in list(ws_clients):
+                all_data = get_all_current_data()
+                ts = time.time() * 1000
+                disconnected = []
+                for ws, subscribed in list(ws_clients.items()):
                     try:
-                        await ws.send_text(message)
+                        if subscribed is None:
+                            filtered = all_data
+                        else:
+                            filtered = {s: all_data[s] for s in subscribed if s in all_data}
+                        if filtered:
+                            await ws.send_text(json.dumps({"type": "update", "data": filtered, "ts": ts}))
                     except Exception:
-                        disconnected.add(ws)
-                ws_clients.difference_update(disconnected)
+                        disconnected.append(ws)
+                for ws in disconnected:
+                    ws_clients.pop(ws, None)
 
             cycle_ms = (time.time() - t0) * 1000
             if cycle_ms > 1500:
@@ -156,21 +164,54 @@ app.include_router(router)
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    ws_clients.add(ws)
+    ws_clients[ws] = None  # None = subscribed to all (backward compatible)
     log.info("ws_client_connected", total=len(ws_clients))
     try:
-        # Send initial snapshot
+        # Send initial snapshot (all data)
         data = get_all_current_data()
         await ws.send_text(json.dumps({"type": "snapshot", "data": data, "ts": time.time() * 1000}))
-        # Keep connection alive, listen for client messages (e.g., ping)
+
+        # Listen for client messages
         while True:
-            msg = await ws.receive_text()
-            if msg == "ping":
+            raw = await ws.receive_text()
+            if raw == "ping":
                 await ws.send_text(json.dumps({"type": "pong"}))
+                continue
+
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+
+            msg_type = msg.get("type")
+            if msg_type == "subscribe":
+                symbols = msg.get("symbols", [])
+                if isinstance(symbols, list):
+                    current = ws_clients.get(ws)
+                    if current is None:
+                        current = set()
+                    current.update(s for s in symbols if isinstance(s, str))
+                    ws_clients[ws] = current
+                    log.info("ws_subscribe", symbols=list(current))
+                    # Send immediate snapshot for subscribed symbols
+                    all_data = get_all_current_data()
+                    filtered = {s: all_data[s] for s in current if s in all_data}
+                    if filtered:
+                        await ws.send_text(json.dumps({
+                            "type": "snapshot", "data": filtered, "ts": time.time() * 1000
+                        }))
+
+            elif msg_type == "unsubscribe":
+                symbols = msg.get("symbols", [])
+                if isinstance(symbols, list):
+                    current = ws_clients.get(ws)
+                    if current is not None:
+                        current.difference_update(symbols)
+
     except WebSocketDisconnect:
         pass
     finally:
-        ws_clients.discard(ws)
+        ws_clients.pop(ws, None)
         log.info("ws_client_disconnected", total=len(ws_clients))
 
 

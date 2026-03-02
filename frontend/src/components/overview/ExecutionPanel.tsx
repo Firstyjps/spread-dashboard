@@ -130,11 +130,23 @@ export function ExecutionPanel({ symbol }: Props) {
   const netPnl = (bybitPos?.pnl || 0) + (lighterPos?.pnl || 0);
   const hasPosition = (bybitPos?.amount || 0) > 0 || (lighterPos?.amount || 0) > 0;
 
+  // Entry BPS: spread at position entry = (lighter_entry - bybit_entry) / bybit_entry * 10000
+  const entryBps = (hasPosition && bybitPos?.entry_price && lighterPos?.entry_price && bybitPos.entry_price > 0)
+    ? ((lighterPos.entry_price - bybitPos.entry_price) / bybitPos.entry_price) * 10000
+    : null;
+
   return (
     <div className="bg-gray-900/60 border border-gray-800 rounded-lg p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider">Execution Panel</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider">Execution Panel</h3>
+          {entryBps != null && (
+            <span className="text-xs font-mono font-bold text-cyan-400">
+              Entry: {entryBps >= 0 ? '+' : ''}{entryBps.toFixed(2)} bps
+            </span>
+          )}
+        </div>
         {hasPosition && (
           <span className={`text-xs font-mono font-bold ${netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             Net PnL: {formatPnl(netPnl)}

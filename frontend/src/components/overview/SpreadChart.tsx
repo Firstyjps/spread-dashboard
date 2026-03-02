@@ -18,7 +18,6 @@ interface Props {
 }
 
 const TIME_RANGES = [
-  { label: '1m', minutes: 1 },
   { label: '5m', minutes: 5 },
   { label: '15m', minutes: 15 },
   { label: '1h', minutes: 60 },
@@ -30,7 +29,7 @@ type TimeRange = (typeof TIME_RANGES)[number];
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 
 export function SpreadChart({ symbol }: Props) {
-  const [selectedRange, setSelectedRange] = useState<TimeRange>(TIME_RANGES[1]); // default 5m
+  const [selectedRange, setSelectedRange] = useState<TimeRange>(TIME_RANGES[2]); // default 1h
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
 
   const toggleLine = (dataKey: string) => {

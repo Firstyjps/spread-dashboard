@@ -12,13 +12,14 @@ export default function App() {
   const [page, setPage] = useState<Page>('overview');
   const [wsData, setWsData] = useState<any>(null);
 
-  const handleWsMessage = useCallback((msg: any) => {
-    if (msg.type === 'update' || msg.type === 'snapshot') {
-      setWsData(msg.data);
+  const handleWsMessage = useCallback((msg: unknown) => {
+    const m = msg as { type?: string; data?: Record<string, unknown> };
+    if (m.type === 'update' || m.type === 'snapshot') {
+      setWsData(m.data ?? null);
     }
   }, []);
 
-  const { isConnected } = useWebSocket({
+  const { isConnected, subscribe, unsubscribe } = useWebSocket({
     url: `ws://${window.location.host}/ws`,
     onMessage: handleWsMessage,
   });

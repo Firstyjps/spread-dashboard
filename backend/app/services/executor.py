@@ -1,42 +1,71 @@
 """
 Arbitrage Executor — sends orders to Lighter + Bybit simultaneously.
 
+Bybit side uses Smart Maker Engine (PostOnly LIMIT) to save ~63% on fees.
+Lighter side stays MARKET (L2 DEX, different fee model).
+
 Safety: if one side fails, the other is immediately reversed.
 Cleanup: client resources are properly closed after each execution.
 """
 import asyncio
 import structlog
+from decimal import Decimal
 from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
+from app.execution.maker_engine import smart_execute_maker, MakerConfig
 
 log = structlog.get_logger()
+
+
+def _build_maker_config(config) -> MakerConfig:
+    """Build MakerConfig from app settings."""
+    return MakerConfig(
+        max_time_s=getattr(config, "maker_max_time_s", 15.0),
+        reprice_interval_ms=getattr(config, "maker_reprice_interval_ms", 800),
+        max_reprices=getattr(config, "maker_max_reprices", 8),
+        aggressiveness=getattr(config, "maker_aggressiveness", "BALANCED"),
+        allow_market_fallback=getattr(config, "maker_allow_market_fallback", True),
+        maker_fee_rate=getattr(config, "maker_fee_rate", 0.0002),
+        taker_fee_rate=getattr(config, "taker_fee_rate", 0.00055),
+        spread_guard_ticks=getattr(config, "maker_spread_guard_ticks", 1),
+        vol_window=getattr(config, "maker_vol_window", 20),
+        vol_limit_ticks=getattr(config, "maker_vol_limit_ticks", 10),
+        max_deviation_ticks=getattr(config, "maker_max_deviation_ticks", 50),
+    )
 
 
 class ArbitrageExecutor:
     def __init__(self, config):
         self.lighter = LighterClient(config)
         self.bybit = BybitClient(config)
+        self.maker_config = _build_maker_config(config)
 
     async def run_arb(self, symbol: str, strategy_side: str, amount: float):
-        """Execute arb: place orders on both exchanges simultaneously.
+        """Execute arb: Lighter MARKET + Bybit Smart Maker (PostOnly LIMIT).
 
+        Bybit uses maker engine for lower fees (0.02% vs 0.055% taker).
         If Lighter fails but Bybit succeeds, Bybit is reversed for safety.
         """
         log.info("arb_execution_start", side=strategy_side, symbol=symbol, amount=amount)
 
         try:
             if strategy_side == "BUY_LIGHTER_SELL_BYBIT":
-                tasks = [
-                    self.lighter.place_market_order(symbol, amount, is_ask=False),
-                    self.bybit.place_market_order(symbol, amount, side="Sell"),
-                ]
+                lighter_task = self.lighter.place_market_order(symbol, amount, is_ask=False)
+                bybit_side = "Sell"
             else:
-                tasks = [
-                    self.lighter.place_market_order(symbol, amount, is_ask=True),
-                    self.bybit.place_market_order(symbol, amount, side="Buy"),
-                ]
+                lighter_task = self.lighter.place_market_order(symbol, amount, is_ask=True)
+                bybit_side = "Buy"
 
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Execute Lighter MARKET + Bybit Maker concurrently
+            bybit_task = smart_execute_maker(
+                client=self.bybit,
+                symbol=symbol,
+                side=bybit_side,
+                target_qty=Decimal(str(amount)),
+                config=self.maker_config,
+            )
+
+            results = await asyncio.gather(lighter_task, bybit_task, return_exceptions=True)
 
             lighter_res = results[0]
             bybit_res = results[1]
@@ -44,6 +73,11 @@ class ArbitrageExecutor:
             # Check for failures
             lighter_failed = isinstance(lighter_res, Exception)
             bybit_failed = isinstance(bybit_res, Exception)
+
+            # Maker engine returns MakerResult (not exception) even on abort
+            if not bybit_failed and hasattr(bybit_res, "status") and bybit_res.status == "aborted":
+                bybit_failed = True
+                bybit_res = Exception(f"Maker engine aborted: {bybit_res.detail}")
 
             if lighter_failed and not bybit_failed:
                 log.warning("arb_mismatch_lighter_failed", error=str(lighter_res))
@@ -74,6 +108,10 @@ class ArbitrageExecutor:
                 raise Exception(
                     f"Both exchanges failed! Lighter: {lighter_res} | Bybit: {bybit_res}"
                 )
+
+            # Log maker engine telemetry
+            if hasattr(bybit_res, "to_dict"):
+                log.info("arb_bybit_maker_result", **bybit_res.to_dict())
 
             log.info("arb_execution_success", lighter=str(lighter_res), bybit=str(bybit_res))
             return results
