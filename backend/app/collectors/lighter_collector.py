@@ -152,7 +152,7 @@ def _use_fallback():
         "LINKUSDT":     (8,   1, 5, 1.0,     "LINK"),
         "AVAXUSDT":     (9,   2, 4, 0.5,     "AVAX"),
         "SUIUSDT":      (16,  1, 5, 3.0,     "SUI"),
-        "XAUUSDT":      (92,  4, 2, 0.003,   "XAU"),
+        "XAUTUSDT":      (92,  4, 2, 0.003,   "XAU"),
     }
 
     SYMBOL_TO_MARKET_ID = {}
