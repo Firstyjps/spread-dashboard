@@ -32,36 +32,40 @@ _poll_task: asyncio.Task | None = None
 async def poll_loop():
     """
     Background polling loop.
-    Fetches prices from both exchanges, computes spreads, stores to DB,
-    and broadcasts to WebSocket clients.
+    Fetches ALL symbols from both exchanges in parallel (not sequentially),
+    computes spreads, stores to DB, and broadcasts to WebSocket clients.
     """
-    log.info("poll_loop_started", interval_s=settings.poll_interval_seconds, symbols=settings.symbol_list)
+    symbols = settings.symbol_list
+    log.info("poll_loop_started", interval_s=settings.poll_interval_seconds, symbols=symbols)
 
     while True:
+        t0 = time.time()
         try:
-            for symbol in settings.symbol_list:
-                # Fetch ticks from both exchanges concurrently
-                bybit_tick, lighter_tick = await asyncio.gather(
-                    bybit_collector.fetch_ticker(symbol, category="linear"),
-                    lighter_collector.fetch_ticker(symbol),
-                    return_exceptions=True,
-                )
+            # Fetch ALL symbols from BOTH exchanges in one parallel batch
+            tasks = []
+            for symbol in symbols:
+                tasks.append(bybit_collector.fetch_ticker(symbol, category="linear"))
+                tasks.append(lighter_collector.fetch_ticker(symbol))
 
-                # Process Bybit tick
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Process results in pairs (bybit, lighter) per symbol
+            for i, symbol in enumerate(symbols):
+                bybit_tick = results[i * 2]
+                lighter_tick = results[i * 2 + 1]
+
                 if isinstance(bybit_tick, Exception):
                     log.error("bybit_poll_error", symbol=symbol, error=str(bybit_tick))
                 elif bybit_tick:
                     await update_tick(bybit_tick)
                     await insert_tick(bybit_tick)
 
-                # Process Lighter tick
                 if isinstance(lighter_tick, Exception):
                     log.error("lighter_poll_error", symbol=symbol, error=str(lighter_tick))
                 elif lighter_tick:
                     await update_tick(lighter_tick)
                     await insert_tick(lighter_tick)
 
-                # Compute spread if both ticks available
                 spread = compute_spread(symbol)
                 if spread:
                     await insert_spread(spread)
@@ -77,6 +81,10 @@ async def poll_loop():
                     except Exception:
                         disconnected.add(ws)
                 ws_clients.difference_update(disconnected)
+
+            cycle_ms = (time.time() - t0) * 1000
+            if cycle_ms > 1500:
+                log.warning("poll_cycle_slow", cycle_ms=round(cycle_ms))
 
         except Exception as e:
             log.error("poll_loop_error", error=str(e))
@@ -113,6 +121,9 @@ async def lifespan(app: FastAPI):
             await _poll_task
         except asyncio.CancelledError:
             pass
+    # Close persistent HTTP sessions
+    await bybit_collector.close_session()
+    await lighter_collector.close_session()
 
 
 # --- FastAPI App ---

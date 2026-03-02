@@ -28,11 +28,13 @@ export function OverviewPage({ data }: Props) {
     queryKey: ['funding'],
     queryFn: api.funding,
     refetchInterval: 30000,
+    staleTime: 25000,
   });
   const { data: alertsData } = useQuery({
     queryKey: ['alerts'],
     queryFn: () => api.alerts(10),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
+    staleTime: 10000,
   });
 
   // All symbols from data

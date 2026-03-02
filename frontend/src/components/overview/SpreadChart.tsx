@@ -1,5 +1,5 @@
 // file: frontend/src/components/overview/SpreadChart.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   LineChart,
@@ -55,19 +55,23 @@ export function SpreadChart({ symbol }: Props) {
         ? { minutes: selectedRange.minutes }
         : { limit: 500 }
       ),
-    refetchInterval: 3000,
+    refetchInterval: 10000,
+    staleTime: 8000,
   });
 
   const history = data?.history ?? [];
   const count = data?.count ?? history.length;
 
-  // Convert to bps for display
-  const chartData = history.map((row: any) => ({
-    time: new Date(row.ts).toLocaleTimeString(),
-    mid_spread: +(row.exchange_spread_mid * 10000).toFixed(2),
-    long_spread: +(row.long_spread * 10000).toFixed(2),
-    short_spread: +(row.short_spread * 10000).toFixed(2),
-  }));
+  // Convert to bps for display — memoized to prevent unnecessary recalcs
+  const chartData = useMemo(() =>
+    history.map((row: any) => ({
+      time: new Date(row.ts).toLocaleTimeString(),
+      mid_spread: +(row.exchange_spread_mid * 10000).toFixed(2),
+      long_spread: +(row.long_spread * 10000).toFixed(2),
+      short_spread: +(row.short_spread * 10000).toFixed(2),
+    })),
+    [history]
+  );
 
   const handleExportCsv = () => {
     const minutes = selectedRange.minutes ?? 60;
