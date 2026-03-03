@@ -15,6 +15,7 @@ from app.collectors import bybit_collector, lighter_collector
 from app.collectors.bybit_client import BybitClient
 from app.storage.database import get_recent_spreads, get_spreads_by_time, get_recent_alerts
 from app.config import settings
+from app.utils.percentiles import compute_percentiles
 from app.execution import TradeRequest
 from app.services.executor import ArbitrageExecutor
 from app.execution.maker_engine import smart_execute_maker, MakerConfig
@@ -66,12 +67,25 @@ async def spreads(
         history = await get_spreads_by_time(symbol, minutes)
     else:
         history = await get_recent_spreads(symbol, limit)
+
+    # Compute P10/P90 percentile stats on mid spread (same data the chart shows)
+    mid_values = [row.get("exchange_spread_mid") for row in history]
+    stats = compute_percentiles(mid_values)
+    log.debug(
+        "spread_percentiles",
+        symbol=symbol,
+        n=stats.n,
+        p10=stats.p10,
+        p90=stats.p90,
+    )
+
     return {
         "symbol": symbol,
         "current": current.model_dump() if current else None,
         "zscore": zscore,
         "history": history,
         "count": len(history),
+        "stats": stats.to_dict(),
     }
 
 

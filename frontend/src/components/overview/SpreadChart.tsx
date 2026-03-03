@@ -1,6 +1,6 @@
 // file: frontend/src/components/overview/SpreadChart.tsx
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import {
   LineChart,
   Line,
@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
   ReferenceLine,
+  ReferenceArea,
 } from 'recharts';
 import { api } from '../../services/api';
 
@@ -33,7 +34,20 @@ const MAX_CHART_POINTS = 1500;
 
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 
-export function SpreadChart({ symbol }: Props) {
+// Hoisted style objects — prevents new references every render
+const CHART_MARGIN = { top: 5, right: 5, bottom: 5, left: 5 };
+const AXIS_TICK = { fill: '#6b7280', fontSize: 10 };
+const Y_DOMAIN: [string, string] = ['auto', 'auto'];
+const TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: '#1f2937',
+  border: '1px solid #374151',
+  borderRadius: 8,
+  fontSize: 12,
+};
+const TOOLTIP_LABEL_STYLE = { color: '#9ca3af' };
+const LEGEND_WRAPPER_STYLE = { fontSize: 11, cursor: 'pointer' };
+
+export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
   const [selectedRange, setSelectedRange] = useState<TimeRange>(TIME_RANGES[2]); // default 1h
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
 
@@ -57,10 +71,19 @@ export function SpreadChart({ symbol }: Props) {
     queryFn: () => api.spreads(symbol, { minutes: selectedRange.minutes }),
     refetchInterval: 10000,
     staleTime: 8000,
+    placeholderData: keepPreviousData,
   });
 
   const history = data?.history ?? [];
   const count = data?.count ?? history.length;
+  const stats = data?.stats as
+    | { p10: number | null; p90: number | null; mean: number | null; n: number }
+    | undefined;
+
+  // Convert percentile stats to bps (same unit as chart Y-axis)
+  const p10Bps = stats?.p10 != null ? +(stats.p10 * 10000).toFixed(2) : null;
+  const p90Bps = stats?.p90 != null ? +(stats.p90 * 10000).toFixed(2) : null;
+  const showPercentiles = p10Bps != null && p90Bps != null;
 
   // Convert to bps + downsample if too many points
   const chartData = useMemo(() => {
@@ -141,28 +164,23 @@ export function SpreadChart({ symbol }: Props) {
         ) : (
           <>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+              <LineChart data={chartData} margin={CHART_MARGIN}>
                 <XAxis
                   dataKey="time"
-                  tick={{ fill: '#6b7280', fontSize: 10 }}
+                  tick={AXIS_TICK}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fill: '#6b7280', fontSize: 10 }}
-                  domain={['auto', 'auto']}
+                  tick={AXIS_TICK}
+                  domain={Y_DOMAIN}
                   width={45}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  labelStyle={{ color: '#9ca3af' }}
+                  contentStyle={TOOLTIP_CONTENT_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
                 />
                 <Legend
-                  wrapperStyle={{ fontSize: 11, cursor: 'pointer' }}
+                  wrapperStyle={LEGEND_WRAPPER_STYLE}
                   onClick={(e: any) => {
                     if (e?.dataKey) toggleLine(e.dataKey);
                   }}
@@ -206,15 +224,50 @@ export function SpreadChart({ symbol }: Props) {
                   isAnimationActive={false}
                   hide={hiddenLines.has('short_spread')}
                 />
+                {/* P10/P90 percentile overlays */}
+                {showPercentiles && (
+                  <ReferenceArea
+                    y1={p10Bps!}
+                    y2={p90Bps!}
+                    fill="#a78bfa"
+                    fillOpacity={0.08}
+                    ifOverflow="extendDomain"
+                  />
+                )}
+                {showPercentiles && (
+                  <ReferenceLine
+                    y={p10Bps!}
+                    stroke="#a78bfa"
+                    strokeDasharray="6 3"
+                    strokeWidth={1}
+                    label={{ value: `P10 ${p10Bps}`, position: 'insideBottomRight', fill: '#a78bfa', fontSize: 10 }}
+                    ifOverflow="extendDomain"
+                  />
+                )}
+                {showPercentiles && (
+                  <ReferenceLine
+                    y={p90Bps!}
+                    stroke="#a78bfa"
+                    strokeDasharray="6 3"
+                    strokeWidth={1}
+                    label={{ value: `P90 ${p90Bps}`, position: 'insideTopRight', fill: '#a78bfa', fontSize: 10 }}
+                    ifOverflow="extendDomain"
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
-            {/* Data point count */}
+            {/* Data point count + percentile info */}
             <div className="text-right text-xs text-gray-600 -mt-1">
               {count} pts
+              {showPercentiles && (
+                <span className="ml-2 text-purple-400/60">
+                  P10/P90 on {stats!.n} samples
+                </span>
+              )}
             </div>
           </>
         )}
       </div>
     </section>
   );
-}
+});

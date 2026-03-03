@@ -16,6 +16,11 @@ const MAX_RETRIES = 30;
 const HEARTBEAT_INTERVAL_MS = 15000;
 const HEARTBEAT_TIMEOUT_MS = 5000;
 
+/** Add random jitter to prevent thundering-herd reconnection storms */
+function jitter(baseMs: number): number {
+  return baseMs + Math.random() * Math.min(baseMs, 1000);
+}
+
 export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOptions) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
@@ -24,6 +29,9 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
   const pongTimer = useRef<ReturnType<typeof setTimeout>>();
   const retryCount = useRef(0);
   const backoffMs = useRef(INITIAL_BACKOFF_MS);
+
+  // Unmount flag — prevents reconnect scheduling after cleanup
+  const unmountedRef = useRef(false);
 
   // Keep latest onMessage in a ref to avoid reconnect loops
   const onMessageRef = useRef(onMessage);
@@ -71,6 +79,19 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
   }, []);
 
   const connect = useCallback(() => {
+    // Guard: don't connect after unmount
+    if (unmountedRef.current) return;
+
+    // Guard: close any existing connection before opening a new one (prevents duplicates)
+    if (wsRef.current) {
+      const existing = wsRef.current;
+      if (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING) {
+        existing.onclose = null; // detach to prevent re-triggering reconnect
+        existing.close();
+      }
+      wsRef.current = null;
+    }
+
     try {
       if (retryCount.current >= MAX_RETRIES) {
         console.error(`[WS] Max retries (${MAX_RETRIES}) reached — giving up`);
@@ -85,6 +106,8 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (unmountedRef.current) { ws.close(); return; }
+
         setConnectionState('connected');
         // Reset backoff on successful connect
         retryCount.current = 0;
@@ -119,10 +142,14 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
       ws.onclose = () => {
         clearInterval(heartbeatTimer.current);
         clearTimeout(pongTimer.current);
+
+        // Don't reconnect if unmounted
+        if (unmountedRef.current) return;
+
         setConnectionState('reconnecting');
 
-        // Exponential backoff: 1s → 2s → 4s → 8s → ... → max 30s
-        const delay = backoffMs.current;
+        // Exponential backoff with jitter: ~1s → ~2s → ~4s → ... → max ~30s
+        const delay = jitter(backoffMs.current);
         retryCount.current += 1;
         backoffMs.current = Math.min(backoffMs.current * 2, MAX_BACKOFF_MS);
 
@@ -133,7 +160,9 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
         ws.close();
       };
     } catch {
-      const delay = backoffMs.current;
+      if (unmountedRef.current) return;
+
+      const delay = jitter(backoffMs.current);
       retryCount.current += 1;
       backoffMs.current = Math.min(backoffMs.current * 2, MAX_BACKOFF_MS);
       reconnectTimer.current = setTimeout(connect, delay);
@@ -142,10 +171,17 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
   }, [url, startHeartbeat]);
 
   useEffect(() => {
+    unmountedRef.current = false;
     connect();
     return () => {
+      unmountedRef.current = true;
       clearTimers();
-      wsRef.current?.close();
+      // Detach onclose before closing to prevent reconnect scheduling
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
   }, [connect, clearTimers]);
 

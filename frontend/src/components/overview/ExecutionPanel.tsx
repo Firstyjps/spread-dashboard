@@ -53,7 +53,7 @@ function formatPnl(n: number | undefined): string {
   return `${sign}$${formatNum(Math.abs(n))}`;
 }
 
-export function ExecutionPanel({ symbol }: Props) {
+export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Props) {
   const [amount, setAmount] = useState('0.01');
   const [loading, setLoading] = useState(false);
   const [bybitPos, setBybitPos] = useState<PositionData | null>(null);
@@ -244,8 +244,8 @@ export function ExecutionPanel({ symbol }: Props) {
             </button>
           </div>
           <div className="space-y-1 max-h-32 overflow-y-auto">
-            {tradeLog.slice(0, 10).map((log, i) => (
-              <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
+            {tradeLog.slice(0, 10).map((log) => (
+              <div key={`${log.ts}-${log.action}`} className="flex items-center gap-2 text-[11px] font-mono">
                 <span className="text-gray-600">
                   {new Date(log.ts).toLocaleTimeString()}
                 </span>
@@ -264,10 +264,10 @@ export function ExecutionPanel({ symbol }: Props) {
       )}
     </div>
   );
-}
+});
 
 
-function PositionCard({ exchange, pos }: {
+const PositionCard = React.memo(function PositionCard({ exchange, pos }: {
   exchange: string;
   pos: PositionData | null;
 }) {
@@ -323,4 +323,4 @@ function PositionCard({ exchange, pos }: {
       )}
     </div>
   );
-}
+});

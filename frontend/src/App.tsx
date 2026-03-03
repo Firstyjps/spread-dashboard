@@ -1,5 +1,5 @@
 // file: frontend/src/App.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './services/api';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -8,14 +8,33 @@ import { HealthPage } from './components/health/HealthPage';
 
 type Page = 'overview' | 'health';
 
+// Flush buffered WS data to React state at this rate (~4fps)
+const WS_FLUSH_INTERVAL_MS = 250;
+
 export default function App() {
   const [page, setPage] = useState<Page>('overview');
   const [wsData, setWsData] = useState<any>(null);
 
+  // Buffer: WS messages write here without triggering renders
+  const wsBufferRef = useRef<any>(null);
+  const hasPendingRef = useRef(false);
+
+  // Flush timer: transfers buffer → state at a fixed rate
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (hasPendingRef.current) {
+        hasPendingRef.current = false;
+        setWsData(wsBufferRef.current);
+      }
+    }, WS_FLUSH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+
   const handleWsMessage = useCallback((msg: unknown) => {
     const m = msg as { type?: string; data?: Record<string, unknown> };
     if (m.type === 'update' || m.type === 'snapshot') {
-      setWsData(m.data ?? null);
+      wsBufferRef.current = m.data ?? null;
+      hasPendingRef.current = true;
     }
   }, []);
 
@@ -24,11 +43,13 @@ export default function App() {
     onMessage: handleWsMessage,
   });
 
-  // Fallback REST polling (if WS not connected)
+  // Fallback REST polling (only active when WS is disconnected)
   const { data: restData } = useQuery({
     queryKey: ['prices'],
     queryFn: api.prices,
     enabled: !isConnected,
+    refetchInterval: 2000,
+    staleTime: 1000,
   });
 
   const priceData = wsData || restData;

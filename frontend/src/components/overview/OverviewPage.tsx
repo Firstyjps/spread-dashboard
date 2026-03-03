@@ -23,7 +23,7 @@ function saveVisibleSymbols(symbols: Set<string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...symbols]));
 }
 
-export function OverviewPage({ data }: Props) {
+export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
   const { data: fundingData } = useQuery({
     queryKey: ['funding'],
     queryFn: api.funding,
@@ -417,9 +417,9 @@ export function OverviewPage({ data }: Props) {
         <section>
           <h2 className="text-sm font-semibold text-gray-400 uppercase mb-3">Recent Alerts</h2>
           <div className="space-y-1">
-            {alertsData.slice(0, 5).map((a: any, i: number) => (
+            {alertsData.slice(0, 5).map((a: any) => (
               <div
-                key={i}
+                key={a.id ?? a.ts}
                 className={`px-3 py-2 rounded text-sm ${
                   a.severity === 'critical'
                     ? 'bg-red-900/30 text-red-300'
@@ -446,4 +446,4 @@ export function OverviewPage({ data }: Props) {
       )}
     </div>
   );
-}
+});

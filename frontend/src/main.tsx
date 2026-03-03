@@ -8,8 +8,10 @@ import './index.css';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchInterval: 2000,
-      staleTime: 1000,
+      // No global refetchInterval — each query sets its own:
+      //   spreads: 10s, funding: 30s, alerts: 15s, prices: 2s (REST fallback only)
+      staleTime: 5000,
+      refetchOnWindowFocus: false,
     },
   },
 });
