@@ -18,7 +18,8 @@ from app.config import settings
 from app.api.routes import router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
-from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data
+from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data, close_db
+from app.alerts import on_spread_update, close_telegram_session
 
 log = structlog.get_logger()
 
@@ -31,25 +32,40 @@ ws_clients: dict[WebSocket, set[str] | None] = {}
 _poll_task: asyncio.Task | None = None
 
 
+_consecutive_errors = 0
+
+
 async def poll_loop():
     """
-    Background polling loop.
-    Fetches ALL symbols from both exchanges in parallel (not sequentially),
-    computes spreads, stores to DB, and broadcasts to WebSocket clients.
+    Background polling loop with resilience.
+    - Timeout per cycle (10s) prevents hang
+    - Calculates remaining sleep to keep consistent interval
+    - Consecutive error tracking with warning escalation
     """
+    global _consecutive_errors
     symbols = settings.symbol_list
-    log.info("poll_loop_started", interval_s=settings.poll_interval_seconds, symbols=symbols)
+    interval = settings.poll_interval_seconds
+    log.info("poll_loop_started", interval_s=interval, symbols=symbols)
 
     while True:
         t0 = time.time()
         try:
-            # Fetch ALL symbols from BOTH exchanges in one parallel batch
+            # Fetch ALL symbols from BOTH exchanges — with 10s timeout
             tasks = []
             for symbol in symbols:
                 tasks.append(bybit_collector.fetch_ticker(symbol, category="linear"))
                 tasks.append(lighter_collector.fetch_ticker(symbol))
 
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            try:
+                results = await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=10.0,
+                )
+            except asyncio.TimeoutError:
+                log.error("poll_cycle_timeout", symbols=symbols)
+                _consecutive_errors += 1
+                await asyncio.sleep(max(0.5, interval))
+                continue
 
             # Process results in pairs (bybit, lighter) per symbol
             for i, symbol in enumerate(symbols):
@@ -71,6 +87,7 @@ async def poll_loop():
                 spread = compute_spread(symbol)
                 if spread:
                     await insert_spread(spread)
+                    await on_spread_update(spread)
 
             # Broadcast to connected WS clients (filtered by subscription)
             if ws_clients:
@@ -90,14 +107,36 @@ async def poll_loop():
                 for ws in disconnected:
                     ws_clients.pop(ws, None)
 
+            # Reset error counter on success
+            _consecutive_errors = 0
+
             cycle_ms = (time.time() - t0) * 1000
             if cycle_ms > 1500:
                 log.warning("poll_cycle_slow", cycle_ms=round(cycle_ms))
 
         except Exception as e:
-            log.error("poll_loop_error", error=str(e))
+            _consecutive_errors += 1
+            log.error("poll_loop_error", error=str(e), consecutive=_consecutive_errors)
+            if _consecutive_errors >= 5:
+                log.warning("poll_loop_degraded", consecutive_errors=_consecutive_errors)
 
-        await asyncio.sleep(settings.poll_interval_seconds)
+        # Sleep remaining interval (maintain consistent timing)
+        elapsed = time.time() - t0
+        sleep_s = max(0.1, interval - elapsed)
+        await asyncio.sleep(sleep_s)
+
+
+async def _supervised_poll_loop():
+    """Supervisor: if poll_loop crashes, wait 2s and restart."""
+    while True:
+        try:
+            await poll_loop()
+        except asyncio.CancelledError:
+            raise  # Propagate cancellation from shutdown
+        except Exception as e:
+            log.error("poll_loop_crashed", error=str(e))
+            await asyncio.sleep(2)
+            log.info("poll_loop_restarting")
 
 
 @asynccontextmanager
@@ -115,9 +154,9 @@ async def lifespan(app: FastAPI):
     if deleted > 0:
         log.info("db_cleanup_on_startup", rows_deleted=deleted)
 
-    # Start background polling
+    # Start background polling with supervision (auto-restart on crash)
     global _poll_task
-    _poll_task = asyncio.create_task(poll_loop())
+    _poll_task = asyncio.create_task(_supervised_poll_loop())
 
     yield
 
@@ -129,9 +168,11 @@ async def lifespan(app: FastAPI):
             await _poll_task
         except asyncio.CancelledError:
             pass
-    # Close persistent HTTP sessions
+    # Close persistent HTTP sessions + DB
     await bybit_collector.close_session()
     await lighter_collector.close_session()
+    await close_telegram_session()
+    await close_db()
 
 
 # --- FastAPI App ---

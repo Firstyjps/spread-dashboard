@@ -1,8 +1,15 @@
 // file: frontend/src/services/api.ts
 const BASE = '/api/v1';
+const FETCH_TIMEOUT_MS = 15000;
+
+function withTimeout(ms: number): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
 
 async function fetchJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { signal: withTimeout(FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -12,6 +19,7 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: withTimeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

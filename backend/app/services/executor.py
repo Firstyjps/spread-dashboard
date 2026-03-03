@@ -40,6 +40,12 @@ class ArbitrageExecutor:
         self.bybit = BybitClient(config)
         self.maker_config = _build_maker_config(config)
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self._cleanup()
+
     async def run_arb(self, symbol: str, strategy_side: str, amount: float):
         """Execute arb: Lighter MARKET + Bybit Smart Maker (PostOnly LIMIT).
 

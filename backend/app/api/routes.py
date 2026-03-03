@@ -18,6 +18,10 @@ from app.config import settings
 from app.execution import TradeRequest
 from app.services.executor import ArbitrageExecutor
 from app.execution.maker_engine import smart_execute_maker, MakerConfig
+from app.execution.iceberg_executor import (
+    execute_iceberg, IcebergConfig, PricePolicy, Urgency,
+)
+from app.execution.rate_limiter import TokenBucketRateLimiter, RateLimiterConfig
 
 log = structlog.get_logger()
 
@@ -49,7 +53,7 @@ async def prices():
 async def spreads(
     symbol: str = "BTCUSDT",
     limit: int = Query(default=500, le=5000),
-    minutes: Optional[int] = Query(default=None, le=1440),
+    minutes: Optional[int] = Query(default=None, le=10080),
 ):
     """
     Current and historical spread data.
@@ -147,10 +151,10 @@ SIDE_MAP = {
 async def get_positions(symbol: str = "BTCUSDT"):
     """Get current positions on both exchanges for a symbol."""
     try:
-        executor = ArbitrageExecutor(settings)
-        bybit_pos = await executor.bybit.get_position(symbol)
-        lighter_pos = await executor.lighter.get_position(symbol)
-        return {"symbol": symbol, "bybit": bybit_pos, "lighter": lighter_pos}
+        async with ArbitrageExecutor(settings) as executor:
+            bybit_pos = await executor.bybit.get_position(symbol)
+            lighter_pos = await executor.lighter.get_position(symbol)
+            return {"symbol": symbol, "bybit": bybit_pos, "lighter": lighter_pos}
     except Exception as e:
         log.error("get_positions_error", symbol=symbol, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -158,21 +162,21 @@ async def get_positions(symbol: str = "BTCUSDT"):
 
 @router.post("/execute")
 async def execute_trade(req: TradeRequest):
-    executor = ArbitrageExecutor(settings)
     mapped_side = SIDE_MAP.get(req.side, req.side)
 
     try:
-        results = await executor.run_arb(req.symbol, mapped_side, req.amount)
+        async with ArbitrageExecutor(settings) as executor:
+            results = await executor.run_arb(req.symbol, mapped_side, req.amount)
 
-        for res in results:
-            if isinstance(res, Exception):
-                raise HTTPException(status_code=500, detail=f"Execution Failed: {str(res)}")
+            for res in results:
+                if isinstance(res, Exception):
+                    raise HTTPException(status_code=500, detail=f"Execution Failed: {str(res)}")
 
-        return {
-            "status": "success",
-            "detail": f"Atomic Arb triggered for {req.symbol} ({mapped_side}, qty={req.amount})",
-            "results": str(results),
-        }
+            return {
+                "status": "success",
+                "detail": f"Atomic Arb triggered for {req.symbol} ({mapped_side}, qty={req.amount})",
+                "results": str(results),
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -184,9 +188,9 @@ class ClosePositionRequest(BaseModel):
 @router.post("/execute/close_all")
 async def close_all_positions(req: ClosePositionRequest):
     try:
-        executor = ArbitrageExecutor(settings)
-        result = await executor.emergency_close_auto(symbol=req.symbol)
-        return result
+        async with ArbitrageExecutor(settings) as executor:
+            result = await executor.emergency_close_auto(symbol=req.symbol)
+            return result
     except Exception as e:
         log.error("close_all_error", symbol=req.symbol, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -230,4 +234,91 @@ async def test_maker_engine(req: MakerTestRequest):
         return result.to_dict()
     except Exception as e:
         log.error("maker_test_error", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Iceberg Executor ────────────────────────────────────────────
+
+class IcebergRequest(BaseModel):
+    symbol: str = "XAUTUSDT"
+    side: str = "Buy"
+    total_qty: float = 0.01
+    child_qty: float = 0.001
+    max_active_children: int = 1
+    price_policy: str = "PASSIVE"           # PASSIVE | MID | CHASE
+    urgency: str = "normal"                  # passive | normal | aggressive
+    price_limit: Optional[float] = None
+    reduce_only: bool = False
+    max_runtime_s: float = 120.0
+    max_cancels: int = 30
+    reprice_threshold_bps: int = 5
+    max_slippage_bps: int = 50
+
+
+# Module-level shared rate limiter (created once, reused across requests)
+_shared_rate_limiter: Optional[TokenBucketRateLimiter] = None
+
+
+def _get_rate_limiter() -> TokenBucketRateLimiter:
+    global _shared_rate_limiter
+    if _shared_rate_limiter is None:
+        _shared_rate_limiter = TokenBucketRateLimiter(
+            RateLimiterConfig(
+                max_tokens=settings.rate_limit_max_tokens,
+                refill_rate=settings.rate_limit_refill_rate,
+            )
+        )
+    return _shared_rate_limiter
+
+
+@router.post("/execute/iceberg")
+async def execute_iceberg_order(req: IcebergRequest):
+    """Synthetic Iceberg Executor on Bybit. For dev/testing."""
+    if req.side not in ("Buy", "Sell"):
+        raise HTTPException(status_code=400, detail="side must be 'Buy' or 'Sell'")
+    if req.total_qty <= 0 or req.child_qty <= 0:
+        raise HTTPException(status_code=400, detail="qty must be positive")
+    if req.child_qty > req.total_qty:
+        raise HTTPException(status_code=400, detail="child_qty must be <= total_qty")
+
+    try:
+        price_policy = PricePolicy(req.price_policy)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid price_policy: {req.price_policy}")
+    try:
+        urgency = Urgency(req.urgency)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid urgency: {req.urgency}")
+
+    client = BybitClient(settings)
+    iceberg_cfg = IcebergConfig(
+        child_qty=Decimal(str(req.child_qty)),
+        max_active_children=req.max_active_children,
+        price_policy=price_policy,
+        urgency=urgency,
+        price_limit=Decimal(str(req.price_limit)) if req.price_limit else None,
+        reduce_only=req.reduce_only,
+        poll_interval_ms=settings.iceberg_poll_interval_ms,
+        cooldown_ms=settings.iceberg_cooldown_ms,
+        max_runtime_s=req.max_runtime_s,
+        reprice_threshold_bps=req.reprice_threshold_bps,
+        max_cancels=req.max_cancels,
+        max_slippage_bps=req.max_slippage_bps,
+        max_retries=settings.iceberg_max_retries,
+        taker_fee_rate=settings.taker_fee_rate,
+        maker_fee_rate=settings.maker_fee_rate,
+    )
+
+    try:
+        result = await execute_iceberg(
+            client=client,
+            symbol=req.symbol,
+            side=req.side,
+            total_qty=Decimal(str(req.total_qty)),
+            config=iceberg_cfg,
+            rate_limiter=_get_rate_limiter(),
+        )
+        return result.to_dict()
+    except Exception as e:
+        log.error("iceberg_test_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))

@@ -49,7 +49,7 @@ function formatNum(n: number | undefined, decimals = 2): string {
 
 function formatPnl(n: number | undefined): string {
   if (n == null || isNaN(n)) return '–';
-  const sign = n >= 0 ? '+' : '';
+  const sign = n >= 0 ? '+' : '-';
   return `${sign}$${formatNum(Math.abs(n))}`;
 }
 
@@ -180,7 +180,7 @@ export function ExecutionPanel({ symbol }: Props) {
             placeholder="Amount"
           />
           <span className="text-xs text-gray-500 w-8">
-            {symbol.replace('USDT', '')}
+            {symbol.replace('USDT', '').replace('XAUT', 'XAU')}
           </span>
         </div>
 
@@ -267,7 +267,10 @@ export function ExecutionPanel({ symbol }: Props) {
 }
 
 
-function PositionCard({ exchange, pos }: { exchange: string; pos: PositionData | null }) {
+function PositionCard({ exchange, pos }: {
+  exchange: string;
+  pos: PositionData | null;
+}) {
   const hasPos = pos && pos.amount > 0;
 
   return (

@@ -31,8 +31,13 @@ async def update_tick(tick: NormalizedTick):
 
 
 def get_latest_tick(exchange: str, symbol: str) -> Optional[NormalizedTick]:
-    """Get latest tick for exchange/symbol pair."""
+    """Get latest tick for exchange/symbol pair (snapshot read — safe without lock)."""
     return latest_ticks.get(f"{exchange}:{symbol}")
+
+
+def _snapshot_ticks() -> Dict[str, NormalizedTick]:
+    """Take a snapshot of latest_ticks dict for safe iteration."""
+    return dict(latest_ticks)
 
 
 def compute_spread(symbol: str) -> Optional[SpreadMetric]:
@@ -129,7 +134,10 @@ def get_all_current_data() -> Dict:
     result = {}
     symbols_seen = set()
 
-    for key, tick in latest_ticks.items():
+    # Snapshot to avoid race condition with poll_loop writes
+    ticks_snap = _snapshot_ticks()
+
+    for key, tick in ticks_snap.items():
         symbols_seen.add(tick.symbol)
 
     for symbol in symbols_seen:

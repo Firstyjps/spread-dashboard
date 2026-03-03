@@ -21,10 +21,15 @@ const TIME_RANGES = [
   { label: '5m', minutes: 5 },
   { label: '15m', minutes: 15 },
   { label: '1h', minutes: 60 },
-  { label: 'All', minutes: undefined },
+  { label: '4h', minutes: 240 },
+  { label: '24h', minutes: 1440 },
+  { label: '7d', minutes: 10080 },
 ] as const;
 
 type TimeRange = (typeof TIME_RANGES)[number];
+
+// Max chart points — downsample if more to keep rendering fast
+const MAX_CHART_POINTS = 1500;
 
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 
@@ -49,11 +54,7 @@ export function SpreadChart({ symbol }: Props) {
 
   const { data, isLoading } = useQuery({
     queryKey: ['spreads', symbol, selectedRange.label],
-    queryFn: () =>
-      api.spreads(symbol, selectedRange.minutes != null
-        ? { minutes: selectedRange.minutes }
-        : { limit: 500 }
-      ),
+    queryFn: () => api.spreads(symbol, { minutes: selectedRange.minutes }),
     refetchInterval: 10000,
     staleTime: 8000,
   });
@@ -61,20 +62,35 @@ export function SpreadChart({ symbol }: Props) {
   const history = data?.history ?? [];
   const count = data?.count ?? history.length;
 
-  // Convert to bps for display — memoized to prevent unnecessary recalcs
-  const chartData = useMemo(() =>
-    history.map((row: any) => ({
-      time: new Date(row.ts).toLocaleTimeString(),
-      mid_spread: +(row.exchange_spread_mid * 10000).toFixed(2),
-      long_spread: +(row.long_spread * 10000).toFixed(2),
-      short_spread: +(row.short_spread * 10000).toFixed(2),
-    })),
-    [history]
-  );
+  // Convert to bps + downsample if too many points
+  const chartData = useMemo(() => {
+    let rows = history;
+
+    // Downsample: take every Nth row to stay under MAX_CHART_POINTS
+    if (rows.length > MAX_CHART_POINTS) {
+      const step = Math.ceil(rows.length / MAX_CHART_POINTS);
+      rows = rows.filter((_: any, i: number) => i % step === 0);
+    }
+
+    // For ranges >= 4h, show date+time; otherwise just time
+    const showDate = selectedRange.minutes >= 240;
+
+    return rows.map((row: any) => {
+      const d = new Date(row.ts);
+      const time = showDate
+        ? `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        : d.toLocaleTimeString();
+      return {
+        time,
+        mid_spread: +(row.exchange_spread_mid * 10000).toFixed(2),
+        long_spread: +(row.long_spread * 10000).toFixed(2),
+        short_spread: +(row.short_spread * 10000).toFixed(2),
+      };
+    });
+  }, [history, selectedRange.minutes]);
 
   const handleExportCsv = () => {
-    const minutes = selectedRange.minutes ?? 60;
-    const url = api.exportCsvUrl(symbol, minutes);
+    const url = api.exportCsvUrl(symbol, selectedRange.minutes);
     window.open(url, '_blank');
   };
 

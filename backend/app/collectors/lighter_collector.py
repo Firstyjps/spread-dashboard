@@ -177,9 +177,17 @@ def _resolve_symbol(symbol: str) -> str:
     return settings.lighter_aliases.get(symbol, symbol)
 
 
-# ---------- Rate limit backoff ----------
+# ---------- Rate limit backoff (protected by lock) ----------
 _rate_limited_until: float = 0.0  # timestamp when we can resume
 _429_count: int = 0
+_rate_lock: Optional[asyncio.Lock] = None
+
+
+def _get_rate_lock() -> asyncio.Lock:
+    global _rate_lock
+    if _rate_lock is None:
+        _rate_lock = asyncio.Lock()
+    return _rate_lock
 
 
 # ---------- Ticker ----------
@@ -207,10 +215,11 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
             session = await _get_session()
             async with session.get(url, params=params) as resp:
                 if resp.status == 429:
-                    _429_count += 1
-                    backoff_s = min(2 ** _429_count, 30)  # 2, 4, 8, 16, 30s max
-                    _rate_limited_until = time.time() + backoff_s
-                    if _429_count <= 3:  # Don't spam logs
+                    async with _get_rate_lock():
+                        _429_count += 1
+                        backoff_s = min(2 ** _429_count, 30)
+                        _rate_limited_until = time.time() + backoff_s
+                    if _429_count <= 3:
                         log.warning("lighter_rate_limited", backoff_s=backoff_s, count=_429_count)
                     return None
 
@@ -219,7 +228,8 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
                     return None
 
                 # Reset 429 counter on success
-                _429_count = 0
+                async with _get_rate_lock():
+                    _429_count = 0
 
                 data = await resp.json()
                 asks = data.get("asks", [])
@@ -273,11 +283,14 @@ async def _refresh_funding_cache():
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             if resp.status != 200:
                 log.error("lighter_funding_http_error", status=resp.status)
+                # Update timestamp even on error — prevent retry storm
+                _funding_cache_ts = now
                 return
 
             data = await resp.json()
             rates = data.get("funding_rates", [])
             if not rates:
+                _funding_cache_ts = now
                 return
 
             new_cache: Dict[int, Dict] = {}
@@ -292,6 +305,8 @@ async def _refresh_funding_cache():
             log.info("lighter_funding_cache_refreshed", count=len(new_cache))
 
     except Exception as e:
+        # Update timestamp even on exception — retry after TTL, not immediately
+        _funding_cache_ts = now
         log.error("lighter_funding_cache_exception", error=str(e))
 
 

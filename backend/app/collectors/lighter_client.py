@@ -8,16 +8,20 @@ import time
 import aiohttp
 import lighter
 import structlog
+from typing import Optional
 from app.analytics.spread_engine import get_all_current_data
 from app.collectors.lighter_collector import SYMBOL_TO_MARKET_ID, MARKET_META
 
 log = structlog.get_logger()
+
+_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 
 class LighterClient:
     def __init__(self, config):
         self.config = config
         self.base_url = config.lighter_base_url
+        self._session: Optional[aiohttp.ClientSession] = None
 
         # SignerClient is only usable when private key is configured
         if config.lighter_private_key:
@@ -29,6 +33,15 @@ class LighterClient:
         else:
             self.client = None
 
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Reuse persistent HTTP session instead of creating per call."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=_TIMEOUT,
+                connector=aiohttp.TCPConnector(limit=10, ttl_dns_cache=300),
+            )
+        return self._session
+
     async def get_position(self, symbol: str) -> dict:
         try:
             lighter_symbol = self.config.lighter_aliases.get(symbol, symbol)
@@ -37,11 +50,11 @@ class LighterClient:
             url = f"{self.base_url}/api/v1/account"
             params = {"by": "index", "value": str(self.config.lighter_account_index)}
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=10) as resp:
-                    if resp.status != 200:
-                        return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
-                    data = await resp.json()
+            session = await self._get_session()
+            async with session.get(url, params=params) as resp:
+                if resp.status != 200:
+                    return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
+                data = await resp.json()
 
             accounts = data.get("accounts", [])
             if not accounts:
@@ -59,34 +72,45 @@ class LighterClient:
                     pos = p
                     break
 
+            _empty = {
+                "amount": 0.0, "is_long": True, "entry_price": 0.0,
+                "pnl": 0.0, "realized_pnl": 0.0, "funding_paid": 0.0,
+            }
             if not pos:
-                return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
+                return _empty
 
             raw_size = float(pos.get("position", "0"))
-            
+
             if raw_size == 0:
-                return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
+                return _empty
 
             sign = pos.get("sign", 1)
             is_long = (sign == 1)
-            
+
             if raw_size < 0:
                 is_long = False
                 raw_size = abs(raw_size)
 
             entry_price = float(pos.get("avg_entry_price", "0"))
             pnl = float(pos.get("unrealized_pnl", "0"))
+            realized_pnl = float(pos.get("realized_pnl", "0"))
+            funding_paid = float(pos.get("total_funding_paid_out", "0"))
 
             return {
                 "amount": raw_size,
                 "is_long": is_long,
                 "entry_price": entry_price,
                 "pnl": pnl,
+                "realized_pnl": realized_pnl,
+                "funding_paid": funding_paid,
             }
 
         except Exception as e:
             log.error("lighter_get_position_crash", symbol=symbol, error=str(e))
-            return {"amount": 0.0, "is_long": True, "entry_price": 0.0, "pnl": 0.0}
+            return {
+                "amount": 0.0, "is_long": True, "entry_price": 0.0,
+                "pnl": 0.0, "realized_pnl": 0.0, "funding_paid": 0.0,
+            }
 
     async def place_market_order(self, symbol: str, amount: float, is_ask: bool, reduce_only: bool = False):
         """Place a market IOC order on Lighter.
@@ -194,6 +218,12 @@ class LighterClient:
 
     async def close(self):
         """Close the underlying API client session. Call when done with client."""
+        if self._session and not self._session.closed:
+            try:
+                await self._session.close()
+            except Exception:
+                pass
+            self._session = None
         if self.client and hasattr(self.client, "api_client"):
             try:
                 await self.client.api_client.close()

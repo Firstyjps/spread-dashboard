@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     # Polling
     poll_interval_ms: int = 2000
 
+    # Telegram Alerts
+    telegram_enabled: bool = False
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    telegram_alert_cooldown_s: int = 60
+    alert_upper_bps: float = 60.0
+    alert_lower_bps: float = 30.0
+
     # CORS (comma-separated origins, default: localhost dev servers)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
@@ -52,6 +60,23 @@ class Settings(BaseSettings):
     maker_vol_window: int = 20
     maker_vol_limit_ticks: int = 10
     maker_max_deviation_ticks: int = 50
+
+    # Iceberg Executor (Bybit GTC LIMIT synthetic iceberg)
+    iceberg_child_qty: float = 0.001
+    iceberg_max_active_children: int = 1
+    iceberg_price_policy: str = "PASSIVE"           # PASSIVE | MID | CHASE
+    iceberg_urgency: str = "normal"                  # passive | normal | aggressive
+    iceberg_poll_interval_ms: int = 500
+    iceberg_cooldown_ms: int = 1500
+    iceberg_max_runtime_s: float = 120.0
+    iceberg_reprice_threshold_bps: int = 5
+    iceberg_max_cancels: int = 30
+    iceberg_max_slippage_bps: int = 50
+    iceberg_max_retries: int = 3
+
+    # Rate limiter (shared across execution strategies)
+    rate_limit_max_tokens: int = 10
+    rate_limit_refill_rate: float = 10.0
 
     # Cross-exchange symbol aliases (format: "DASHBOARD_SYM:LIGHTER_SYM,...")
     # When symbols differ between exchanges, map dashboard symbol to Lighter symbol

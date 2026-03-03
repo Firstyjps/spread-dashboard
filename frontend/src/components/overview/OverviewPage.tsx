@@ -269,43 +269,141 @@ export function OverviewPage({ data }: Props) {
               .filter((sym) => fundingData[sym])
               .map((sym) => {
                 const fd = fundingData[sym];
+                const bybitRate = fd?.bybit?.funding_rate;
+                const lighterRate = fd?.lighter?.funding_rate;
+
+                // Normalize to hourly rate for fair comparison
+                const bybitHourly = bybitRate != null ? bybitRate / 8 : null;
+                const lighterHourly = lighterRate != null ? lighterRate / 1 : null;
+
+                // 8h projected cost (what you pay/receive per 8h funding cycle)
+                const bybit8h = bybitRate;
+                const lighter8h = lighterRate != null ? lighterRate * 8 : null;
+
+                // Net funding for arb position (Long Lighter + Short Bybit)
+                // Positive = you receive, Negative = you pay
+                const netFunding8h = (bybit8h != null && lighter8h != null)
+                  ? (bybit8h - lighter8h)  // short Bybit receives when rate positive, long Lighter pays when rate positive
+                  : null;
+
+                // Next funding countdown (Bybit)
+                const nextFundingMs = fd?.bybit?.next_funding_time;
+                const countdown = nextFundingMs ? Math.max(0, nextFundingMs - Date.now()) : null;
+                const countdownMin = countdown != null ? Math.floor(countdown / 60000) : null;
+                const countdownSec = countdown != null ? Math.floor((countdown % 60000) / 1000) : null;
+
+                // Color helpers
+                const rateColor = (r: number | null) => {
+                  if (r == null) return 'text-gray-500';
+                  if (r > 0.0001) return 'text-green-400';   // positive = longs pay shorts
+                  if (r < -0.0001) return 'text-red-400';    // negative = shorts pay longs
+                  return 'text-gray-300';
+                };
+
                 return (
                   <div key={sym} className="bg-gray-900 rounded-lg border border-gray-800 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-mono font-semibold text-emerald-400">{sym}</span>
-                      {fd?.funding_diff != null && (
-                        <span className={`font-mono text-sm ${fd.funding_diff > 0 ? 'text-yellow-400' : 'text-blue-400'}`}>
-                          Diff: {(fd.funding_diff * 100).toFixed(4)}%
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono font-semibold text-emerald-400">{sym}</span>
+                        {countdownMin != null && (
+                          <span className="text-xs font-mono text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
+                            Next: {countdownMin}m {countdownSec}s
+                          </span>
+                        )}
+                      </div>
+                      {netFunding8h != null && (
+                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+                          netFunding8h > 0 ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'
+                        }`}>
+                          Net/8h: {netFunding8h > 0 ? '+' : ''}{(netFunding8h * 100).toFixed(4)}%
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-500 text-xs">Bybit (8h)</span>
-                        <div className="font-mono">
-                          {fd?.bybit?.funding_rate != null
-                            ? (fd.bybit.funding_rate * 100).toFixed(4) + '%'
-                            : '–'}
+
+                    {/* Exchange rates side by side */}
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      {/* Bybit */}
+                      <div className="bg-gray-800/50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-gray-500 text-xs font-medium">Bybit</span>
+                          <span className="text-gray-600 text-xs">8h cycle</span>
                         </div>
-                        {fd?.bybit?.annualized_rate != null && (
-                          <div className="text-xs text-gray-600 font-mono">
-                            Ann: {(fd.bybit.annualized_rate * 100).toFixed(2)}%
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <span className="text-gray-500 text-xs">Lighter (1h)</span>
-                        <div className="font-mono">
-                          {fd?.lighter?.funding_rate != null
-                            ? (fd.lighter.funding_rate * 100).toFixed(4) + '%'
-                            : '–'}
+                        <div className={`font-mono text-lg font-bold ${rateColor(bybitRate)}`}>
+                          {bybitRate != null ? `${(bybitRate * 100).toFixed(4)}%` : '–'}
                         </div>
-                        {fd?.lighter?.annualized_rate != null && (
-                          <div className="text-xs text-gray-600 font-mono">
-                            Ann: {(fd.lighter.annualized_rate * 100).toFixed(2)}%
+                        <div className="grid grid-cols-2 gap-1 mt-2 text-xs font-mono">
+                          <div>
+                            <span className="text-gray-600">Hourly</span>
+                            <div className="text-gray-400">
+                              {bybitHourly != null ? `${(bybitHourly * 100).toFixed(4)}%` : '–'}
+                            </div>
                           </div>
-                        )}
+                          <div>
+                            <span className="text-gray-600">Annual</span>
+                            <div className="text-gray-400">
+                              {fd?.bybit?.annualized_rate != null
+                                ? `${(fd.bybit.annualized_rate * 100).toFixed(2)}%`
+                                : '–'}
+                            </div>
+                          </div>
+                        </div>
                       </div>
+
+                      {/* Lighter */}
+                      <div className="bg-gray-800/50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-gray-500 text-xs font-medium">Lighter</span>
+                          <span className="text-gray-600 text-xs">1h cycle</span>
+                        </div>
+                        <div className={`font-mono text-lg font-bold ${rateColor(lighterRate)}`}>
+                          {lighterRate != null ? `${(lighterRate * 100).toFixed(4)}%` : '–'}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 mt-2 text-xs font-mono">
+                          <div>
+                            <span className="text-gray-600">Per 8h</span>
+                            <div className="text-gray-400">
+                              {lighter8h != null ? `${(lighter8h * 100).toFixed(4)}%` : '–'}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Annual</span>
+                            <div className="text-gray-400">
+                              {fd?.lighter?.annualized_rate != null
+                                ? `${(fd.lighter.annualized_rate * 100).toFixed(2)}%`
+                                : '–'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Summary bar */}
+                    <div className="flex items-center justify-between text-xs bg-gray-800/30 rounded px-3 py-2">
+                      <div className="font-mono">
+                        <span className="text-gray-500">Diff (L-B): </span>
+                        {fd?.funding_diff != null ? (
+                          <span className={fd.funding_diff > 0 ? 'text-yellow-400' : 'text-blue-400'}>
+                            {fd.funding_diff > 0 ? '+' : ''}{(fd.funding_diff * 100).toFixed(4)}%
+                          </span>
+                        ) : '–'}
+                      </div>
+                      <div className="font-mono">
+                        <span className="text-gray-500">Hourly Diff: </span>
+                        {bybitHourly != null && lighterHourly != null ? (
+                          <span className={lighterHourly - bybitHourly > 0 ? 'text-yellow-400' : 'text-blue-400'}>
+                            {(lighterHourly - bybitHourly) > 0 ? '+' : ''}{((lighterHourly - bybitHourly) * 100).toFixed(4)}%
+                          </span>
+                        ) : '–'}
+                      </div>
+                      {bybitRate != null && lighterRate != null && (
+                        <div className="font-mono">
+                          <span className="text-gray-500">Arb: </span>
+                          <span className={netFunding8h != null && netFunding8h > 0 ? 'text-green-400' : 'text-red-400'}>
+                            {netFunding8h != null && netFunding8h > 0 ? 'Favorable' : 'Costly'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
