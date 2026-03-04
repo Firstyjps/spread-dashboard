@@ -22,7 +22,7 @@ import structlog
 
 from app.config import settings
 from app.models import SpreadMetric, Alert
-from app.storage.database import insert_alert
+from app.storage.database import insert_alert, commit as db_commit
 from app.alerts.telegram_notifier import send_telegram
 
 log = structlog.get_logger()
@@ -176,13 +176,16 @@ async def on_spread_update(spread: SpreadMetric) -> None:
     cooldown = settings.telegram_alert_cooldown_s
     ts_utc = datetime.fromtimestamp(spread.ts / 1000, tz=timezone.utc)
 
+    # Per-symbol thresholds (falls back to global defaults)
+    upper_bps, lower_bps = settings.get_alert_thresholds(symbol)
+
     if state.state == AlertState.NORMAL:
-        if metric_bps >= settings.alert_upper_bps:
+        if metric_bps >= upper_bps:
             # NORMAL -> ALERTING
             state.state = AlertState.ALERTING
             state.last_metric_bps = metric_bps
             side = decide_side(
-                metric_bps, settings.alert_upper_bps, settings.alert_lower_bps,
+                metric_bps, upper_bps, lower_bps,
             ) or "SHORT"  # guaranteed non-None here, defensive fallback
             state.last_side = side
             log.warning(
@@ -196,8 +199,8 @@ async def on_spread_update(spread: SpreadMetric) -> None:
                 msg = build_alert_message(
                     symbol=symbol,
                     spread_bps=metric_bps,
-                    upper_bps=settings.alert_upper_bps,
-                    lower_bps=settings.alert_lower_bps,
+                    upper_bps=upper_bps,
+                    lower_bps=lower_bps,
                     side=side,
                     bybit_bid=spread.bybit_bid,
                     bybit_ask=spread.bybit_ask,
@@ -209,10 +212,11 @@ async def on_spread_update(spread: SpreadMetric) -> None:
                     msg, spread, metric_bps,
                     alert_type="spread_alert",
                     severity="critical",
+                    threshold=upper_bps,
                 ))
 
     elif state.state == AlertState.ALERTING:
-        if metric_bps <= settings.alert_lower_bps:
+        if metric_bps <= lower_bps:
             # ALERTING -> NORMAL
             state.state = AlertState.NORMAL
             state.last_metric_bps = metric_bps
@@ -226,7 +230,7 @@ async def on_spread_update(spread: SpreadMetric) -> None:
                 msg = build_recovery_message(
                     symbol=symbol,
                     spread_bps=metric_bps,
-                    lower_bps=settings.alert_lower_bps,
+                    lower_bps=lower_bps,
                     bybit_bid=spread.bybit_bid,
                     bybit_ask=spread.bybit_ask,
                     lighter_bid=spread.lighter_bid,
@@ -237,6 +241,7 @@ async def on_spread_update(spread: SpreadMetric) -> None:
                     msg, spread, metric_bps,
                     alert_type="spread_recovery",
                     severity="info",
+                    threshold=lower_bps,
                 ))
 
 
@@ -246,6 +251,7 @@ async def _send_and_store(
     metric_bps: float,
     alert_type: str,
     severity: str,
+    threshold: float = 0.0,
 ) -> None:
     """Fire-and-forget coroutine: send Telegram + insert DB alert."""
     try:
@@ -261,13 +267,10 @@ async def _send_and_store(
             severity=severity,
             message=message,
             value=metric_bps,
-            threshold=(
-                settings.alert_upper_bps
-                if alert_type == "spread_alert"
-                else settings.alert_lower_bps
-            ),
+            threshold=threshold,
         )
         await insert_alert(alert)
+        await db_commit()
     except Exception as e:
         log.error("alert_db_insert_error", error=str(e))
 

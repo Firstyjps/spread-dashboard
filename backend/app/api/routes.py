@@ -11,6 +11,7 @@ from typing import Optional
 from decimal import Decimal
 from pydantic import BaseModel
 from app.analytics.spread_engine import get_all_current_data, get_latest_tick, compute_spread, compute_zscore
+from app.analytics.cost_model import estimate_net_pnl_bps
 from app.collectors import bybit_collector, lighter_collector
 from app.collectors.bybit_client import BybitClient
 from app.storage.database import get_recent_spreads, get_spreads_by_time, get_recent_alerts
@@ -79,10 +80,19 @@ async def spreads(
         p90=stats.p90,
     )
 
+    # Compute net PnL from current spread's dominant leg
+    net_pnl_bps = None
+    if current:
+        long_bps = abs(current.long_spread) * 10_000
+        short_bps = abs(current.short_spread) * 10_000
+        dominant_bps = max(long_bps, short_bps)
+        net_pnl_bps = estimate_net_pnl_bps(dominant_bps)
+
     return {
         "symbol": symbol,
         "current": current.model_dump() if current else None,
         "zscore": zscore,
+        "net_pnl_bps": net_pnl_bps,
         "history": history,
         "count": len(history),
         "stats": stats.to_dict(),

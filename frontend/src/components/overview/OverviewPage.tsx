@@ -167,6 +167,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
               const baBybit = spread ? (spread.bid_ask_spread_bybit * 10000).toFixed(2) : '-';
               const baLighter = spread ? (spread.bid_ask_spread_lighter * 10000).toFixed(2) : '-';
               const basisBps = spread?.basis_bybit_bps != null ? spread.basis_bybit_bps.toFixed(2) : '-';
+              const netPnl = d?.net_pnl_bps;
               const latBybit = d?.latency_bybit != null ? Math.round(d.latency_bybit) : null;
               const latLighter = d?.latency_lighter != null ? Math.round(d.latency_lighter) : null;
               const isPositive = spread && spread.exchange_spread_mid > 0;
@@ -214,7 +215,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                   </div>
 
                   {/* Metrics row */}
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
+                  <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 text-xs">
                     <div>
                       <span className="text-gray-500">Long</span>
                       <div className="font-mono text-gray-300">{longBps} bps</div>
@@ -222,6 +223,16 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                     <div>
                       <span className="text-gray-500">Short</span>
                       <div className="font-mono text-gray-300">{shortBps} bps</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Net PnL</span>
+                      <div className={`font-mono ${
+                        netPnl == null ? 'text-gray-500'
+                          : netPnl > 0 ? 'text-green-400'
+                          : 'text-red-400'
+                      }`}>
+                        {netPnl != null ? `${netPnl > 0 ? '+' : ''}${netPnl.toFixed(2)} bps` : '-'}
+                      </div>
                     </div>
                     <div>
                       <span className="text-gray-500">Z-Score</span>

@@ -9,6 +9,7 @@ import structlog
 from collections import deque
 from typing import Optional, Dict
 from app.models import NormalizedTick, SpreadMetric
+from app.analytics.cost_model import estimate_net_pnl_bps
 
 log = structlog.get_logger()
 
@@ -146,11 +147,20 @@ def get_all_current_data() -> Dict:
         spread = compute_spread(symbol)
         zscore = compute_zscore(symbol)
 
+        # Compute net PnL after fees using dominant leg
+        net_pnl_bps = None
+        if spread:
+            long_bps = abs(spread.long_spread) * 10_000
+            short_bps = abs(spread.short_spread) * 10_000
+            dominant_bps = max(long_bps, short_bps)
+            net_pnl_bps = estimate_net_pnl_bps(dominant_bps)
+
         result[symbol] = {
             "bybit": bybit.model_dump() if bybit else None,
             "lighter": lighter.model_dump() if lighter else None,
             "spread": spread.model_dump() if spread else None,
             "zscore": zscore,
+            "net_pnl_bps": net_pnl_bps,
             "imbalance_bybit": compute_imbalance(bybit) if bybit else None,
             "imbalance_lighter": compute_imbalance(lighter) if lighter else None,
             "latency_bybit": bybit.latency_ms if bybit else None,

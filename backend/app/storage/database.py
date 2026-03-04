@@ -150,7 +150,7 @@ async def insert_tick(tick: NormalizedTick):
          tick.mid, tick.last_price, tick.mark_price, tick.index_price,
          tick.volume_24h, tick.open_interest, tick.received_at),
     )
-    await db.commit()
+
 
 
 async def insert_spread(spread: SpreadMetric):
@@ -170,7 +170,6 @@ async def insert_spread(spread: SpreadMetric):
          spread.basis_bybit_bps, spread.funding_diff,
          spread.received_at),
     )
-    await db.commit()
 
 
 async def insert_alert(alert: Alert):
@@ -181,6 +180,11 @@ async def insert_alert(alert: Alert):
         (alert.ts, alert.alert_type, alert.symbol, alert.severity,
          alert.message, alert.value, alert.threshold),
     )
+
+
+async def commit():
+    """Explicit commit. Call after a batch of inserts."""
+    db = await _get_db()
     await db.commit()
 
 

@@ -197,7 +197,7 @@ class TestBuildAlertMessage:
         expected = (
             "\U0001f6a8 <b>SPREAD ALERT XAUUSDT</b>\n"
             "metric=61.00 bps (upper=60.00)\n"
-            "side=SHORT\n"
+            "Side=SHORT\n"
             "bybit mid=5045.40\n"
             "lighter mid=5075.20\n"
             "03-Mar-26 22:00 GMT+7"
@@ -257,7 +257,7 @@ class TestBuildAlertMessage:
             lighter_ask=5076.0,
             ts_utc=ts,
         )
-        assert "side=SHORT" in msg
+        assert "Side=SHORT" in msg
 
     def test_no_extra_commentary(self):
         """Alert must be compact — no parenthetical logic explanations."""
@@ -298,7 +298,7 @@ class TestBuildAlertMessage:
         assert len(lines) == 6
         assert lines[0].startswith("\U0001f6a8")
         assert lines[1].startswith("metric=")
-        assert lines[2].startswith("side=")
+        assert lines[2].startswith("Side=")
         assert lines[3].startswith("bybit mid=")
         assert lines[4].startswith("lighter mid=")
         assert lines[5].endswith("GMT+7")
@@ -342,7 +342,7 @@ class TestBuildRecoveryMessage:
             lighter_ask=5076.0,
             ts_utc=ts,
         )
-        assert "side=" not in msg
+        assert "Side=" not in msg
 
     def test_two_decimal_formatting(self):
         ts = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
@@ -364,6 +364,15 @@ class TestBuildRecoveryMessage:
 # Integration: state machine transitions (mocked Telegram)
 # ===================================================================
 
+def _setup_mock_settings(mock_settings, upper=60.0, lower=30.0, cooldown=0):
+    """Configure mock settings for integration tests."""
+    mock_settings.telegram_enabled = True
+    mock_settings.alert_upper_bps = upper
+    mock_settings.alert_lower_bps = lower
+    mock_settings.telegram_alert_cooldown_s = cooldown
+    mock_settings.get_alert_thresholds = lambda symbol: (upper, lower)
+
+
 @pytest.mark.asyncio
 class TestStateTransitions:
 
@@ -371,10 +380,7 @@ class TestStateTransitions:
     @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.settings")
     async def test_normal_to_alerting(self, mock_settings, mock_insert, mock_send):
-        mock_settings.telegram_enabled = True
-        mock_settings.alert_upper_bps = 60.0
-        mock_settings.alert_lower_bps = 30.0
-        mock_settings.telegram_alert_cooldown_s = 0
+        _setup_mock_settings(mock_settings)
         mock_send.return_value = True
 
         spread = _make_spread(long_spread=0.007)  # 70 bps > 60
@@ -390,11 +396,8 @@ class TestStateTransitions:
     @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.settings")
     async def test_alert_message_has_side_short(self, mock_settings, mock_insert, mock_send):
-        """When upper threshold breached, message must contain side=SHORT."""
-        mock_settings.telegram_enabled = True
-        mock_settings.alert_upper_bps = 60.0
-        mock_settings.alert_lower_bps = 30.0
-        mock_settings.telegram_alert_cooldown_s = 0
+        """When upper threshold breached, message must contain Side=SHORT."""
+        _setup_mock_settings(mock_settings)
         mock_send.return_value = True
 
         spread = _make_spread(long_spread=0.007)  # 70 bps > 60
@@ -402,18 +405,15 @@ class TestStateTransitions:
         await asyncio.sleep(0.1)
 
         call_text = mock_send.call_args[0][0]
-        assert "side=SHORT" in call_text
-        assert "side=LONG" not in call_text
+        assert "Side=SHORT" in call_text
+        assert "Side=LONG" not in call_text
 
     @patch("app.alerts.alert_engine.send_telegram", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.settings")
     async def test_alert_message_format(self, mock_settings, mock_insert, mock_send):
         """Alert message must use mid prices, 2dp, and Bangkok TZ."""
-        mock_settings.telegram_enabled = True
-        mock_settings.alert_upper_bps = 60.0
-        mock_settings.alert_lower_bps = 30.0
-        mock_settings.telegram_alert_cooldown_s = 0
+        _setup_mock_settings(mock_settings)
         mock_send.return_value = True
 
         spread = _make_spread(
@@ -440,10 +440,7 @@ class TestStateTransitions:
     @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.settings")
     async def test_alerting_to_normal(self, mock_settings, mock_insert, mock_send):
-        mock_settings.telegram_enabled = True
-        mock_settings.alert_upper_bps = 60.0
-        mock_settings.alert_lower_bps = 30.0
-        mock_settings.telegram_alert_cooldown_s = 0
+        _setup_mock_settings(mock_settings)
         mock_send.return_value = True
 
         # First trigger alert
@@ -468,10 +465,7 @@ class TestStateTransitions:
     @patch("app.alerts.alert_engine.settings")
     async def test_no_transition_in_dead_zone(self, mock_settings, mock_insert, mock_send):
         """Between upper (60) and lower (30) thresholds, no transition occurs."""
-        mock_settings.telegram_enabled = True
-        mock_settings.alert_upper_bps = 60.0
-        mock_settings.alert_lower_bps = 30.0
-        mock_settings.telegram_alert_cooldown_s = 0
+        _setup_mock_settings(mock_settings)
         mock_send.return_value = True
 
         # Trigger alert first
@@ -491,10 +485,7 @@ class TestStateTransitions:
     @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.settings")
     async def test_cooldown_prevents_repeat(self, mock_settings, mock_insert, mock_send):
-        mock_settings.telegram_enabled = True
-        mock_settings.alert_upper_bps = 60.0
-        mock_settings.alert_lower_bps = 30.0
-        mock_settings.telegram_alert_cooldown_s = 9999  # very long cooldown
+        _setup_mock_settings(mock_settings, cooldown=9999)
         mock_send.return_value = True
 
         # Trigger alert
@@ -514,6 +505,7 @@ class TestStateTransitions:
     @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.settings")
     async def test_disabled_does_nothing(self, mock_settings, mock_insert, mock_send):
+        _setup_mock_settings(mock_settings)
         mock_settings.telegram_enabled = False
 
         await on_spread_update(_make_spread(long_spread=0.007))
@@ -526,10 +518,7 @@ class TestStateTransitions:
     @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.settings")
     async def test_multi_symbol_independent(self, mock_settings, mock_insert, mock_send):
-        mock_settings.telegram_enabled = True
-        mock_settings.alert_upper_bps = 60.0
-        mock_settings.alert_lower_bps = 30.0
-        mock_settings.telegram_alert_cooldown_s = 0
+        _setup_mock_settings(mock_settings)
         mock_send.return_value = True
 
         # Alert BTC, keep ETH normal
@@ -544,10 +533,7 @@ class TestStateTransitions:
     @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
     @patch("app.alerts.alert_engine.settings")
     async def test_below_upper_stays_normal(self, mock_settings, mock_insert, mock_send):
-        mock_settings.telegram_enabled = True
-        mock_settings.alert_upper_bps = 60.0
-        mock_settings.alert_lower_bps = 30.0
-        mock_settings.telegram_alert_cooldown_s = 0
+        _setup_mock_settings(mock_settings)
 
         await on_spread_update(_make_spread(long_spread=0.005))  # 50 bps < 60
         await asyncio.sleep(0.1)
@@ -555,3 +541,115 @@ class TestStateTransitions:
         state = _get_state("BTCUSDT")
         assert state.state == AlertState.NORMAL
         mock_send.assert_not_called()
+
+
+# ===================================================================
+# Per-symbol threshold tests
+# ===================================================================
+
+@pytest.mark.asyncio
+class TestPerSymbolThresholds:
+
+    @patch("app.alerts.alert_engine.send_telegram", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.settings")
+    async def test_xaut_custom_threshold(self, mock_settings, mock_insert, mock_send):
+        """XAUTUSDT with custom thresholds (75/45) — 70 bps should NOT trigger."""
+        mock_settings.telegram_enabled = True
+        mock_settings.telegram_alert_cooldown_s = 0
+        # XAUT uses 75/45, global is 9/-1
+        mock_settings.get_alert_thresholds = lambda sym: (75.0, 45.0) if sym == "XAUTUSDT" else (9.0, -1.0)
+        mock_send.return_value = True
+
+        spread = _make_spread("XAUTUSDT", long_spread=0.007)  # 70 bps < 75
+        await on_spread_update(spread)
+        await asyncio.sleep(0.1)
+
+        assert _get_state("XAUTUSDT").state == AlertState.NORMAL
+        mock_send.assert_not_called()
+
+    @patch("app.alerts.alert_engine.send_telegram", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.settings")
+    async def test_xaut_triggers_at_custom_upper(self, mock_settings, mock_insert, mock_send):
+        """XAUTUSDT at 80 bps should trigger (>= 75)."""
+        mock_settings.telegram_enabled = True
+        mock_settings.telegram_alert_cooldown_s = 0
+        mock_settings.get_alert_thresholds = lambda sym: (75.0, 45.0) if sym == "XAUTUSDT" else (9.0, -1.0)
+        mock_send.return_value = True
+
+        spread = _make_spread("XAUTUSDT", long_spread=0.008)  # 80 bps >= 75
+        await on_spread_update(spread)
+        await asyncio.sleep(0.1)
+
+        assert _get_state("XAUTUSDT").state == AlertState.ALERTING
+        mock_send.assert_called_once()
+        call_text = mock_send.call_args[0][0]
+        assert "upper=75.00" in call_text
+
+    @patch("app.alerts.alert_engine.send_telegram", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.settings")
+    async def test_hype_uses_global_default(self, mock_settings, mock_insert, mock_send):
+        """HYPEUSDT uses global defaults (9/-1) — 10 bps should trigger."""
+        mock_settings.telegram_enabled = True
+        mock_settings.telegram_alert_cooldown_s = 0
+        mock_settings.get_alert_thresholds = lambda sym: (75.0, 45.0) if sym == "XAUTUSDT" else (9.0, -1.0)
+        mock_send.return_value = True
+
+        spread = _make_spread("HYPEUSDT", long_spread=0.001)  # 10 bps >= 9
+        await on_spread_update(spread)
+        await asyncio.sleep(0.1)
+
+        assert _get_state("HYPEUSDT").state == AlertState.ALERTING
+        mock_send.assert_called_once()
+        call_text = mock_send.call_args[0][0]
+        assert "upper=9.00" in call_text
+
+    @patch("app.alerts.alert_engine.send_telegram", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.settings")
+    async def test_recovery_uses_per_symbol_lower(self, mock_settings, mock_insert, mock_send):
+        """XAUT recovery at lower=45: 50 bps stays ALERTING, 40 bps recovers."""
+        mock_settings.telegram_enabled = True
+        mock_settings.telegram_alert_cooldown_s = 0
+        mock_settings.get_alert_thresholds = lambda sym: (75.0, 45.0) if sym == "XAUTUSDT" else (9.0, -1.0)
+        mock_send.return_value = True
+
+        # Trigger alert at 80 bps
+        await on_spread_update(_make_spread("XAUTUSDT", long_spread=0.008))
+        await asyncio.sleep(0.1)
+        assert _get_state("XAUTUSDT").state == AlertState.ALERTING
+        mock_send.reset_mock()
+
+        # 50 bps — in dead zone for XAUT (45-75), stays ALERTING
+        await on_spread_update(_make_spread("XAUTUSDT", long_spread=0.005))
+        await asyncio.sleep(0.1)
+        assert _get_state("XAUTUSDT").state == AlertState.ALERTING
+        mock_send.assert_not_called()
+
+        # 40 bps <= 45 — recovers
+        await on_spread_update(_make_spread("XAUTUSDT", long_spread=0.004))
+        await asyncio.sleep(0.1)
+        assert _get_state("XAUTUSDT").state == AlertState.NORMAL
+        mock_send.assert_called_once()
+        call_text = mock_send.call_args[0][0]
+        assert "lower=45.00" in call_text
+
+    @patch("app.alerts.alert_engine.send_telegram", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.insert_alert", new_callable=AsyncMock)
+    @patch("app.alerts.alert_engine.settings")
+    async def test_different_symbols_different_thresholds(self, mock_settings, mock_insert, mock_send):
+        """XAUT and HYPE use different thresholds simultaneously."""
+        mock_settings.telegram_enabled = True
+        mock_settings.telegram_alert_cooldown_s = 0
+        mock_settings.get_alert_thresholds = lambda sym: (75.0, 45.0) if sym == "XAUTUSDT" else (9.0, -1.0)
+        mock_send.return_value = True
+
+        # 10 bps: triggers HYPE (>= 9) but not XAUT (< 75)
+        await on_spread_update(_make_spread("HYPEUSDT", long_spread=0.001))  # 10 bps
+        await on_spread_update(_make_spread("XAUTUSDT", long_spread=0.001))  # 10 bps
+        await asyncio.sleep(0.1)
+
+        assert _get_state("HYPEUSDT").state == AlertState.ALERTING
+        assert _get_state("XAUTUSDT").state == AlertState.NORMAL

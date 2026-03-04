@@ -155,6 +155,7 @@ def _use_fallback():
         "SUIUSDT":   (16,  1, 5, 3.0,     "SUI"),
         "XAUTUSDT":  (92,  4, 2, 0.003,   "XAUUSDT"),
         "XAUUSDT":   (92,  4, 2, 0.003,   "XAU"),
+        "HYPEUSDT":  (24,  2, 4, 0.5,     "HYPE"),
     }
 
     SYMBOL_TO_MARKET_ID = {}

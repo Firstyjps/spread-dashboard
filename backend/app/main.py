@@ -18,7 +18,7 @@ from app.config import settings
 from app.api.routes import router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
-from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data, close_db
+from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data, close_db, commit as db_commit
 from app.alerts import on_spread_update, close_telegram_session
 
 log = structlog.get_logger()
@@ -68,26 +68,33 @@ async def poll_loop():
                 continue
 
             # Process results in pairs (bybit, lighter) per symbol
+            # Each symbol is isolated — one failure won't block others
             for i, symbol in enumerate(symbols):
-                bybit_tick = results[i * 2]
-                lighter_tick = results[i * 2 + 1]
+                try:
+                    bybit_tick = results[i * 2]
+                    lighter_tick = results[i * 2 + 1]
 
-                if isinstance(bybit_tick, Exception):
-                    log.error("bybit_poll_error", symbol=symbol, error=str(bybit_tick))
-                elif bybit_tick:
-                    await update_tick(bybit_tick)
-                    await insert_tick(bybit_tick)
+                    if isinstance(bybit_tick, Exception):
+                        log.error("bybit_poll_error", symbol=symbol, error=str(bybit_tick))
+                    elif bybit_tick:
+                        await update_tick(bybit_tick)
+                        await insert_tick(bybit_tick)
 
-                if isinstance(lighter_tick, Exception):
-                    log.error("lighter_poll_error", symbol=symbol, error=str(lighter_tick))
-                elif lighter_tick:
-                    await update_tick(lighter_tick)
-                    await insert_tick(lighter_tick)
+                    if isinstance(lighter_tick, Exception):
+                        log.error("lighter_poll_error", symbol=symbol, error=str(lighter_tick))
+                    elif lighter_tick:
+                        await update_tick(lighter_tick)
+                        await insert_tick(lighter_tick)
 
-                spread = compute_spread(symbol)
-                if spread:
-                    await insert_spread(spread)
-                    await on_spread_update(spread)
+                    spread = compute_spread(symbol)
+                    if spread:
+                        await insert_spread(spread)
+                        await on_spread_update(spread)
+                except Exception as e:
+                    log.error("symbol_processing_error", symbol=symbol, error=str(e))
+
+            # Single batch commit for all inserts this cycle
+            await db_commit()
 
             # Broadcast to connected WS clients (filtered by subscription)
             if ws_clients:

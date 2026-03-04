@@ -1,6 +1,6 @@
 # file: backend/app/config/settings.py
 from pydantic_settings import BaseSettings
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import os
 
 
@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     rate_limit_max_tokens: int = 10
     rate_limit_refill_rate: float = 10.0
 
+    # Per-symbol alert threshold overrides (format: "SYMBOL:UPPER:LOWER,...")
+    # Symbols not listed here use global alert_upper_bps / alert_lower_bps
+    # e.g., "XAUTUSDT:75:45" means XAUT alerts at 75 bps upper, 45 bps lower
+    alert_overrides: str = ""
+
     # Cross-exchange symbol aliases (format: "DASHBOARD_SYM:LIGHTER_SYM,...")
     # When symbols differ between exchanges, map dashboard symbol to Lighter symbol
     # e.g., "XAUTUSDT:XAUUSDT" means: dashboard uses XAUTUSDT, Lighter uses XAUUSDT (market: XAU)
@@ -90,6 +95,25 @@ class Settings(BaseSettings):
     @property
     def poll_interval_seconds(self) -> float:
         return self.poll_interval_ms / 1000.0
+
+    def get_alert_thresholds(self, symbol: str) -> Tuple[float, float]:
+        """Return (upper_bps, lower_bps) for a symbol.
+
+        Checks alert_overrides first; falls back to global defaults.
+        Format: "SYMBOL:UPPER:LOWER,..."
+        """
+        if self.alert_overrides:
+            for entry in self.alert_overrides.split(","):
+                entry = entry.strip()
+                if not entry:
+                    continue
+                parts = entry.split(":")
+                if len(parts) == 3 and parts[0].strip() == symbol:
+                    try:
+                        return float(parts[1].strip()), float(parts[2].strip())
+                    except ValueError:
+                        continue
+        return self.alert_upper_bps, self.alert_lower_bps
 
     @property
     def lighter_aliases(self) -> Dict[str, str]:
