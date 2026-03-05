@@ -1,0 +1,61 @@
+# ─── Production Docker Compose ──────────────────────────────────
+#
+# Architecture:
+#   Internet → Cloudflare → NPM (443) → frontend:80 (nginx)
+#                                          ├── /          → static files
+#                                          ├── /api/*     → backend:8000
+#                                          └── /ws        → backend:8000
+#
+# Networks:
+#   proxy-net   (external) — NPM ↔ frontend (for NPM to reach frontend)
+#   app-internal (internal) — frontend ↔ backend (for API/WS proxying)
+#
+# NPM never reaches backend directly — only through frontend nginx.
+# ────────────────────────────────────────────────────────────────
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    # No host port mapping — only reachable via internal network
+    expose:
+      - "8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      # Only persist the SQLite database, NOT source code
+      - ./backend/data:/app/data
+    restart: always
+    networks:
+      - app-internal
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    # No host port mapping — only reachable via proxy-net
+    expose:
+      - "80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: always
+    networks:
+      - app-internal   # to reach backend:8000
+      - proxy-net      # so NPM can reach frontend:80
+
+networks:
+  app-internal:
+    driver: bridge
+    # Internal: not accessible from host, only between containers
+  proxy-net:
+    external: true
+    # Created manually: docker network create proxy-net
+    # Shared with NPM's docker-compose (~/proxy)

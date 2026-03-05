@@ -183,10 +183,12 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                 />
                 <Legend
                   wrapperStyle={LEGEND_WRAPPER_STYLE}
-                  onClick={(e: { dataKey?: string | number }) => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  onClick={(e: any) => {
                     if (e?.dataKey && typeof e.dataKey === 'string') toggleLine(e.dataKey);
                   }}
-                  formatter={(value: string, entry: { dataKey?: string | number; color?: string }) => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(value: string, entry: any) => {
                     const key = typeof entry.dataKey === 'string' ? entry.dataKey : '';
                     return (
                       <span style={{

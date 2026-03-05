@@ -1,0 +1,34 @@
+# Production backend Dockerfile
+# No --reload, no source-mount, minimal image
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# System deps needed for building Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps (layer cache — only re-runs when requirements.txt changes)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code (no source mount in production)
+COPY . .
+
+# Create data directory for SQLite
+RUN mkdir -p /app/data
+
+EXPOSE 8000
+
+# Production: no --reload, use multiple workers for CPU-bound tasks
+# --workers 2: modest for a small VPS (CPX12 = 2 vCPU)
+# --timeout-keep-alive 65: slightly above Cloudflare's 60s keep-alive
+CMD ["uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "1", \
+     "--timeout-keep-alive", "65", \
+     "--access-log"]
