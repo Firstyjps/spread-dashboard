@@ -252,7 +252,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                   </div>
 
                   {/* Metrics row */}
-                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <div>
                       <span className="text-gray-500">Long</span>
                       <div className="font-mono text-gray-300">{longBps} bps</div>
@@ -291,28 +291,6 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                           </div>
                         );
                       })()}
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Z-Score</span>
-                      <div className={`font-mono ${zsColor(d?.zscore)}`}>{zs}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Imbalance</span>
-                      <div className="font-mono">
-                        <span className={imbColor(d?.imbalance_bybit)}>B:{fmtImb(d?.imbalance_bybit)}</span>
-                        {' '}
-                        <span className={imbColor(d?.imbalance_lighter)}>L:{fmtImb(d?.imbalance_lighter)}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Basis</span>
-                      <div className="font-mono text-gray-300">{basisBps} bps</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">BA Spread</span>
-                      <div className="font-mono text-gray-300">
-                        B:{baBybit} / L:{baLighter}
-                      </div>
                     </div>
                     <div>
                       <span className="text-gray-500">Latency</span>
@@ -456,32 +434,16 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                     </div>
 
                     {/* Summary bar */}
-                    <div className="flex items-center justify-between text-xs bg-gray-800/30 rounded px-3 py-2">
-                      <div className="font-mono">
-                        <span className="text-gray-500">Diff (L-B): </span>
-                        {fd?.funding_diff != null ? (
-                          <span className={fd.funding_diff > 0 ? 'text-yellow-400' : 'text-blue-400'}>
-                            {fd.funding_diff > 0 ? '+' : ''}{(fd.funding_diff * 100).toFixed(4)}%
-                          </span>
-                        ) : '–'}
-                      </div>
-                      <div className="font-mono">
-                        <span className="text-gray-500">Hourly Diff: </span>
-                        {bybitHourly != null && lighterHourly != null ? (
-                          <span className={lighterHourly - bybitHourly > 0 ? 'text-yellow-400' : 'text-blue-400'}>
-                            {(lighterHourly - bybitHourly) > 0 ? '+' : ''}{((lighterHourly - bybitHourly) * 100).toFixed(4)}%
-                          </span>
-                        ) : '–'}
-                      </div>
-                      {bybitRate != null && lighterRate != null && (
+                    {bybitRate != null && lighterRate != null && (
+                      <div className="flex items-center text-xs bg-gray-800/30 rounded px-3 py-2">
                         <div className="font-mono">
                           <span className="text-gray-500">Arb: </span>
                           <span className={netFunding8h != null && netFunding8h > 0 ? 'text-green-400' : 'text-red-400'}>
                             {netFunding8h != null && netFunding8h > 0 ? 'Favorable' : 'Costly'}
                           </span>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

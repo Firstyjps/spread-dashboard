@@ -206,14 +206,14 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
           <button
             onClick={() => handleExecute('LONG_LIGHTER')}
             disabled={loading}
-            className="flex-1 bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-600/50 py-2.5 rounded font-bold text-xs transition-colors disabled:opacity-50"
+            className="flex-1 bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-600/50 py-3 sm:py-2.5 rounded font-bold text-xs transition-colors disabled:opacity-50"
           >
             {loading ? 'EXECUTING...' : 'BUY L / SELL B'}
           </button>
           <button
             onClick={() => handleExecute('SHORT_LIGHTER')}
             disabled={loading}
-            className="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/50 py-2.5 rounded font-bold text-xs transition-colors disabled:opacity-50"
+            className="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/50 py-3 sm:py-2.5 rounded font-bold text-xs transition-colors disabled:opacity-50"
           >
             {loading ? 'EXECUTING...' : 'SELL L / BUY B'}
           </button>
@@ -245,11 +245,11 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
           </div>
           <div className="space-y-1 max-h-32 overflow-y-auto">
             {tradeLog.slice(0, 10).map((log) => (
-              <div key={`${log.ts}-${log.action}`} className="flex items-center gap-2 text-[11px] font-mono">
+              <div key={`${log.ts}-${log.action}`} className="flex items-center gap-2 text-xs font-mono">
                 <span className="text-gray-600">
                   {new Date(log.ts).toLocaleTimeString()}
                 </span>
-                <span className="text-gray-400 w-24 truncate">{log.action}</span>
+                <span className="text-gray-400 w-20 sm:w-24 truncate">{log.action}</span>
                 {log.amount > 0 && (
                   <span className="text-gray-500">{log.amount}</span>
                 )}
@@ -278,7 +278,7 @@ const PositionCard = React.memo(function PositionCard({ exchange, pos }: {
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-semibold text-gray-400">{exchange}</span>
         {hasPos && (
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
             pos.is_long
               ? 'bg-green-900/50 text-green-400'
               : 'bg-red-900/50 text-red-400'
@@ -293,7 +293,7 @@ const PositionCard = React.memo(function PositionCard({ exchange, pos }: {
           <div className="text-white font-mono text-sm font-bold">
             {formatNum(pos.amount, 4)}
           </div>
-          <div className="grid grid-cols-2 gap-x-2 text-[10px]">
+          <div className="grid grid-cols-2 gap-x-2 text-xs">
             <div>
               <span className="text-gray-500">Entry:</span>{' '}
               <span className="text-gray-300 font-mono">{formatNum(pos.entry_price)}</span>

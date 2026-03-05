@@ -11,7 +11,6 @@ import {
   ResponsiveContainer,
   Legend,
   ReferenceLine,
-  ReferenceArea,
 } from 'recharts';
 import { api } from '../../services/api';
 
@@ -122,7 +121,7 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
   return (
     <section>
       {/* Header with controls */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
         <h2 className="text-sm font-semibold text-gray-400 uppercase">
           Spread Chart — {symbol} (bps)
         </h2>
@@ -133,7 +132,7 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
               <button
                 key={range.label}
                 onClick={() => setSelectedRange(range)}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                className={`px-2 py-1.5 sm:px-2.5 sm:py-1 rounded text-xs font-medium transition-colors ${
                   selectedRange.label === range.label
                     ? 'bg-emerald-600 text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700'
@@ -158,7 +157,28 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
         </div>
       </div>
 
-      <div className="h-64 bg-gray-900 rounded-lg border border-gray-800 p-3">
+      {/* Percentile badges */}
+      {showPercentiles && (
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-500/10 border border-sky-500/20">
+            <span className="text-[10px] font-medium text-sky-400/70 uppercase">P10</span>
+            <span className="text-xs font-semibold text-sky-300">{p10Bps}</span>
+          </span>
+          {meanBps != null && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20">
+              <span className="text-[10px] font-medium text-amber-400/70 uppercase">Mean</span>
+              <span className="text-xs font-semibold text-amber-300">{meanBps}</span>
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-pink-500/10 border border-pink-500/20">
+            <span className="text-[10px] font-medium text-pink-400/70 uppercase">P90</span>
+            <span className="text-xs font-semibold text-pink-300">{p90Bps}</span>
+          </span>
+          <span className="text-[10px] text-gray-600 ml-1">{stats!.n} samples</span>
+        </div>
+      )}
+
+      <div className="h-48 sm:h-64 bg-gray-900 rounded-lg border border-gray-800 p-3">
         {chartData.length < 2 ? (
           <div className="h-full flex items-center justify-center text-gray-500 text-sm">
             {isLoading ? 'Loading...' : `Collecting data... (${chartData.length} points)`}
@@ -231,56 +251,30 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                   isAnimationActive={false}
                   hide={hiddenLines.has('short_spread')}
                 />
-                {/* P10/P90 percentile overlays */}
-                {showPercentiles && (
-                  <ReferenceArea
-                    y1={p10Bps!}
-                    y2={p90Bps!}
-                    fill="#a78bfa"
-                    fillOpacity={0.08}
-                    ifOverflow="extendDomain"
-                  />
-                )}
+                {/* P10/P90 dashed lines */}
                 {showPercentiles && (
                   <ReferenceLine
                     y={p10Bps!}
-                    stroke="#a78bfa"
+                    stroke="#38bdf8"
                     strokeDasharray="6 3"
                     strokeWidth={1}
-                    label={{ value: `P10 ${p10Bps}`, position: 'insideBottomRight', fill: '#a78bfa', fontSize: 10 }}
                     ifOverflow="extendDomain"
                   />
                 )}
                 {showPercentiles && (
                   <ReferenceLine
                     y={p90Bps!}
-                    stroke="#a78bfa"
+                    stroke="#f472b6"
                     strokeDasharray="6 3"
                     strokeWidth={1}
-                    label={{ value: `P90 ${p90Bps}`, position: 'insideTopRight', fill: '#a78bfa', fontSize: 10 }}
-                    ifOverflow="extendDomain"
-                  />
-                )}
-                {meanBps != null && (
-                  <ReferenceLine
-                    y={meanBps}
-                    stroke="#fbbf24"
-                    strokeDasharray="4 4"
-                    strokeWidth={1}
-                    label={{ value: `\u03BC ${meanBps}`, position: 'insideTopLeft', fill: '#fbbf24', fontSize: 10 }}
                     ifOverflow="extendDomain"
                   />
                 )}
               </LineChart>
             </ResponsiveContainer>
-            {/* Data point count + percentile info */}
+            {/* Data point count */}
             <div className="text-right text-xs text-gray-600 -mt-1">
               {count} pts
-              {showPercentiles && (
-                <span className="ml-2 text-purple-400/60">
-                  P10/P90 on {stats!.n} samples
-                </span>
-              )}
             </div>
           </>
         )}

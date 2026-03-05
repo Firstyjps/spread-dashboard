@@ -57,8 +57,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       {/* Nav */}
-      <nav className="border-b border-gray-800 px-6 py-3 flex items-center gap-6">
-        <h1 className="text-lg font-bold text-emerald-400">Spread Dashboard</h1>
+      <nav className="border-b border-gray-800 px-3 py-2 sm:px-6 sm:py-3 flex items-center gap-3 sm:gap-6">
+        <h1 className="text-lg font-bold text-emerald-400">Spread <span className="hidden sm:inline">Dashboard</span></h1>
         <div className="flex gap-2">
           <NavBtn active={page === 'overview'} onClick={() => setPage('overview')}>
             Overview
@@ -78,7 +78,7 @@ export default function App() {
       </nav>
 
       {/* Content */}
-      <main className="p-6">
+      <main className="p-3 sm:p-6">
         {page === 'overview' && <OverviewPage data={priceData} />}
         {page === 'health' && <HealthPage />}
       </main>
