@@ -8,18 +8,9 @@ import structlog
 from decimal import Decimal
 from pybit.unified_trading import HTTP
 
+from app.utils.async_helpers import thread_with_timeout as _thread_with_timeout
+
 log = structlog.get_logger()
-
-# Default timeout for pybit SDK calls (seconds)
-_SDK_TIMEOUT = 10.0
-
-
-async def _thread_with_timeout(fn, *args, timeout: float = _SDK_TIMEOUT, **kwargs):
-    """Run a sync function in a thread with timeout protection."""
-    return await asyncio.wait_for(
-        asyncio.to_thread(fn, *args, **kwargs),
-        timeout=timeout,
-    )
 
 
 class BybitClient:

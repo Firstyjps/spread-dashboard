@@ -68,8 +68,8 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
       setBybitPos(data.bybit);
       setLighterPos(data.lighter);
       setPosError('');
-    } catch (err: any) {
-      setPosError(err.message || 'Failed to fetch positions');
+    } catch (err: unknown) {
+      setPosError(err instanceof Error ? err.message : 'Failed to fetch positions');
     }
   }, [symbol]);
 
@@ -105,8 +105,8 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
       const res = await api.executeArb(symbol, side, amt);
       addLog(label, amt, 'success', res.detail || 'OK');
       fetchPositions();
-    } catch (error: any) {
-      addLog(label, amt, 'failed', error.message || 'Unknown error');
+    } catch (error: unknown) {
+      addLog(label, amt, 'failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -120,8 +120,8 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
       const res = await api.closePositions(symbol);
       addLog('CLOSE ALL', 0, res.status === 'success' ? 'success' : 'failed', res.detail || res.error || 'Done');
       fetchPositions();
-    } catch (error: any) {
-      addLog('CLOSE ALL', 0, 'failed', error.message || 'Unknown error');
+    } catch (error: unknown) {
+      addLog('CLOSE ALL', 0, 'failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setLoading(false);
     }

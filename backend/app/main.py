@@ -100,15 +100,17 @@ async def poll_loop():
             if ws_clients:
                 all_data = get_all_current_data()
                 ts = time.time() * 1000
+                # Pre-serialize full payload once for unfiltered clients
+                all_msg = json.dumps({"type": "update", "data": all_data, "ts": ts})
                 disconnected = []
                 for ws, subscribed in list(ws_clients.items()):
                     try:
                         if subscribed is None:
-                            filtered = all_data
+                            await ws.send_text(all_msg)
                         else:
                             filtered = {s: all_data[s] for s in subscribed if s in all_data}
-                        if filtered:
-                            await ws.send_text(json.dumps({"type": "update", "data": filtered, "ts": ts}))
+                            if filtered:
+                                await ws.send_text(json.dumps({"type": "update", "data": filtered, "ts": ts}))
                     except Exception:
                         disconnected.append(ws)
                 for ws in disconnected:
@@ -208,6 +210,10 @@ app.add_middleware(
 app.include_router(router)
 
 
+# Pre-serialized static message — avoids json.dumps on every ping
+_PONG_MSG = json.dumps({"type": "pong"})
+
+
 # --- WebSocket endpoint ---
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
@@ -223,7 +229,7 @@ async def websocket_endpoint(ws: WebSocket):
         while True:
             raw = await ws.receive_text()
             if raw == "ping":
-                await ws.send_text(json.dumps({"type": "pong"}))
+                await ws.send_text(_PONG_MSG)
                 continue
 
             try:

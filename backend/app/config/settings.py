@@ -78,6 +78,13 @@ class Settings(BaseSettings):
     rate_limit_max_tokens: int = 10
     rate_limit_refill_rate: float = 10.0
 
+    # LIMIT Slicer (Bybit LINEAR — LIMIT-only sliced execution)
+    bybit_testnet: bool = False                # use Bybit testnet API
+    exec_slice_default: int = 5                # default number of slices
+    exec_slice_poll_s: float = 1.0             # fill polling interval (seconds)
+    exec_slice_timeout_s: float = 60.0         # max execution time (seconds)
+    exec_slice_price_offset_bps: int = 0       # extra price aggressiveness (bps)
+
     # Per-symbol alert threshold overrides (format: "SYMBOL:UPPER:LOWER,...")
     # Symbols not listed here use global alert_upper_bps / alert_lower_bps
     # e.g., "XAUTUSDT:75:45" means XAUT alerts at 75 bps upper, 45 bps lower

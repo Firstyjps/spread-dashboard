@@ -43,8 +43,8 @@ async def close_db():
     if _db is not None:
         try:
             await _db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("db_close_error", error=str(e))
         _db = None
         log.info("db_connection_closed")
 
@@ -120,6 +120,7 @@ async def init_db():
             threshold REAL,
             acknowledged INTEGER DEFAULT 0
         );
+        CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts DESC);
     """)
     await db.commit()
 
@@ -194,7 +195,11 @@ async def get_recent_spreads(symbol: str, limit: int = 500):
     db = await _get_db()
     db.row_factory = aiosqlite.Row
     cursor = await db.execute(
-        """SELECT * FROM spread_metrics
+        """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
+                  lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
+                  short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
+                  basis_bybit, basis_bybit_bps, funding_diff, received_at
+           FROM spread_metrics
            WHERE symbol = ? ORDER BY ts DESC LIMIT ?""",
         (symbol, limit),
     )
@@ -208,7 +213,11 @@ async def get_spreads_by_time(symbol: str, minutes: int = 5, max_rows: int = 500
     db = await _get_db()
     db.row_factory = aiosqlite.Row
     cursor = await db.execute(
-        """SELECT * FROM spread_metrics
+        """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
+                  lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
+                  short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
+                  basis_bybit, basis_bybit_bps, funding_diff, received_at
+           FROM spread_metrics
            WHERE symbol = ? AND ts > ? ORDER BY ts ASC LIMIT ?""",
         (symbol, since_ts, max_rows),
     )
@@ -220,7 +229,10 @@ async def get_recent_alerts(limit: int = 50):
     db = await _get_db()
     db.row_factory = aiosqlite.Row
     cursor = await db.execute(
-        "SELECT * FROM alerts ORDER BY ts DESC LIMIT ?", (limit,)
+        """SELECT id, ts, alert_type, symbol, severity, message, value,
+                  threshold, acknowledged
+           FROM alerts ORDER BY ts DESC LIMIT ?""",
+        (limit,),
     )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]

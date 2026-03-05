@@ -1,6 +1,7 @@
 // file: frontend/src/components/overview/SpreadChart.tsx
 import React, { useState, useMemo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import type { SpreadRow, ChartPoint } from '../../types/api';
 import {
   LineChart,
   Line,
@@ -93,13 +94,13 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
     // Downsample: take every Nth row to stay under MAX_CHART_POINTS
     if (rows.length > MAX_CHART_POINTS) {
       const step = Math.ceil(rows.length / MAX_CHART_POINTS);
-      rows = rows.filter((_: any, i: number) => i % step === 0);
+      rows = rows.filter((_: SpreadRow, i: number) => i % step === 0);
     }
 
     // For ranges >= 4h, show date+time; otherwise just time
     const showDate = selectedRange.minutes >= 240;
 
-    return rows.map((row: any) => {
+    return rows.map((row: SpreadRow): ChartPoint => {
       const d = new Date(row.ts);
       const time = showDate
         ? `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
@@ -182,17 +183,20 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                 />
                 <Legend
                   wrapperStyle={LEGEND_WRAPPER_STYLE}
-                  onClick={(e: any) => {
-                    if (e?.dataKey) toggleLine(e.dataKey);
+                  onClick={(e: { dataKey?: string | number }) => {
+                    if (e?.dataKey && typeof e.dataKey === 'string') toggleLine(e.dataKey);
                   }}
-                  formatter={(value: string, entry: any) => (
-                    <span style={{
-                      color: hiddenLines.has(entry.dataKey) ? '#4b5563' : entry.color,
-                      textDecoration: hiddenLines.has(entry.dataKey) ? 'line-through' : 'none',
-                    }}>
-                      {value}
-                    </span>
-                  )}
+                  formatter={(value: string, entry: { dataKey?: string | number; color?: string }) => {
+                    const key = typeof entry.dataKey === 'string' ? entry.dataKey : '';
+                    return (
+                      <span style={{
+                        color: hiddenLines.has(key) ? '#4b5563' : entry.color,
+                        textDecoration: hiddenLines.has(key) ? 'line-through' : 'none',
+                      }}>
+                        {value}
+                      </span>
+                    );
+                  }}
                 />
                 <ReferenceLine y={0} stroke="#4b5563" strokeDasharray="3 3" />
                 <Line

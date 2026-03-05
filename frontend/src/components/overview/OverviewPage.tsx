@@ -4,9 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { SpreadChart } from './SpreadChart';
 import { ExecutionPanel } from './ExecutionPanel';
+import type { SymbolData, SymbolDataMap, Alert } from '../../types/api';
 
 interface Props {
-  data: any;
+  data: SymbolDataMap | null;
 }
 
 const STORAGE_KEY = 'spread-dashboard-visible-symbols';
@@ -24,7 +25,7 @@ function saveVisibleSymbols(symbols: Set<string>) {
 }
 
 // Helper: color Z-Score by intensity
-function zsColor(z: number | null): string {
+function zsColor(z: number | null | undefined): string {
   if (z == null) return 'text-gray-500';
   const abs = Math.abs(z);
   if (abs >= 2.0) return 'text-orange-400';
@@ -33,7 +34,7 @@ function zsColor(z: number | null): string {
 }
 
 // Helper: color imbalance value
-function imbColor(v: number | null): string {
+function imbColor(v: number | null | undefined): string {
   if (v == null) return 'text-gray-500';
   if (v > 0.3) return 'text-green-400';
   if (v < -0.3) return 'text-red-400';
@@ -41,13 +42,13 @@ function imbColor(v: number | null): string {
 }
 
 // Helper: format imbalance
-function fmtImb(v: number | null): string {
+function fmtImb(v: number | null | undefined): string {
   if (v == null) return '-';
   return `${v > 0 ? '+' : ''}${v.toFixed(2)}`;
 }
 
 // Helper: feed staleness dot color
-function staleDot(d: any): string {
+function staleDot(d: SymbolData | undefined): string {
   const bybitAge = d?.bybit?.received_at ? (Date.now() - d.bybit.received_at) / 1000 : 999;
   const lighterAge = d?.lighter?.received_at ? (Date.now() - d.lighter.received_at) / 1000 : 999;
   const maxAge = Math.max(bybitAge, lighterAge);
@@ -493,7 +494,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
         <section>
           <h2 className="text-sm font-semibold text-gray-400 uppercase mb-3">Recent Alerts</h2>
           <div className="space-y-1">
-            {alertsData.slice(0, 5).map((a: any) => (
+            {alertsData.slice(0, 5).map((a: Alert) => (
               <div
                 key={a.id ?? a.ts}
                 className={`px-3 py-2 rounded text-sm ${
