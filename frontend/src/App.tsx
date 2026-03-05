@@ -39,7 +39,7 @@ export default function App() {
   }, []);
 
   const { isConnected, subscribe, unsubscribe } = useWebSocket({
-    url: `ws://${window.location.host}/ws`,
+    url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`,
     onMessage: handleWsMessage,
   });
 

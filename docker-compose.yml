@@ -1,24 +1,44 @@
+# ─── Production Docker Compose ──────────────────────────────────
+#
+# Architecture:
+#   Internet → Cloudflare → NPM (443) → host.docker.internal:3000
+#                                          → frontend:80 (nginx)
+#                                              ├── /          → static files
+#                                              ├── /api/*     → backend:8000
+#                                              └── /ws        → backend:8000
+#
+# Port bindings (localhost only — not reachable from the internet):
+#   127.0.0.1:3000  → frontend:80   (NPM reaches via host.docker.internal)
+#   127.0.0.1:8000  → backend:8000  (debug/healthcheck only)
+#
+# NPM is the ONLY public-facing service (ports 80/443).
+# ────────────────────────────────────────────────────────────────
+
 services:
   backend:
     platform: linux/amd64
     build: ./backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - ./backend/.env
     volumes:
-      - ./backend:/app 
+      # Persist SQLite database only — NO source code mounts
+      - ./backend/data:/app/data
     restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   frontend:
+    platform: linux/amd64
     build: ./frontend
     ports:
-      - "5173:5173"
-    environment:
-      - VITE_BACKEND_URL=http://backend:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "127.0.0.1:3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: always
