@@ -23,6 +23,39 @@ function saveVisibleSymbols(symbols: Set<string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...symbols]));
 }
 
+// Helper: color Z-Score by intensity
+function zsColor(z: number | null): string {
+  if (z == null) return 'text-gray-500';
+  const abs = Math.abs(z);
+  if (abs >= 2.0) return 'text-orange-400';
+  if (abs >= 1.0) return 'text-yellow-400';
+  return 'text-gray-400';
+}
+
+// Helper: color imbalance value
+function imbColor(v: number | null): string {
+  if (v == null) return 'text-gray-500';
+  if (v > 0.3) return 'text-green-400';
+  if (v < -0.3) return 'text-red-400';
+  return 'text-gray-400';
+}
+
+// Helper: format imbalance
+function fmtImb(v: number | null): string {
+  if (v == null) return '-';
+  return `${v > 0 ? '+' : ''}${v.toFixed(2)}`;
+}
+
+// Helper: feed staleness dot color
+function staleDot(d: any): string {
+  const bybitAge = d?.bybit?.received_at ? (Date.now() - d.bybit.received_at) / 1000 : 999;
+  const lighterAge = d?.lighter?.received_at ? (Date.now() - d.lighter.received_at) / 1000 : 999;
+  const maxAge = Math.max(bybitAge, lighterAge);
+  if (maxAge < 5) return 'bg-green-400';
+  if (maxAge < 15) return 'bg-yellow-400';
+  return 'bg-red-400';
+}
+
 export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
   const { data: fundingData } = useQuery({
     queryKey: ['funding'],
@@ -176,7 +209,10 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                 <div key={sym} className="bg-gray-900 rounded-lg border border-gray-800 p-4">
                   {/* Header row */}
                   <div className="flex items-center justify-between mb-3">
-                    <span className="font-mono font-bold text-lg text-emerald-400">{sym}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${staleDot(d)}`} title="Feed freshness" />
+                      <span className="font-mono font-bold text-lg text-emerald-400">{sym}</span>
+                    </div>
                     <span
                       className={`font-mono text-xl font-bold ${
                         isPositive ? 'text-green-400' : 'text-red-400'
@@ -215,7 +251,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                   </div>
 
                   {/* Metrics row */}
-                  <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 text-xs">
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 text-xs">
                     <div>
                       <span className="text-gray-500">Long</span>
                       <div className="font-mono text-gray-300">{longBps} bps</div>
@@ -224,19 +260,48 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                       <span className="text-gray-500">Short</span>
                       <div className="font-mono text-gray-300">{shortBps} bps</div>
                     </div>
-                    <div>
+                    <div className="relative group">
                       <span className="text-gray-500">Net PnL</span>
-                      <div className={`font-mono ${
+                      <div className={`font-mono cursor-help ${
                         netPnl == null ? 'text-gray-500'
                           : netPnl > 0 ? 'text-green-400'
                           : 'text-red-400'
                       }`}>
                         {netPnl != null ? `${netPnl > 0 ? '+' : ''}${netPnl.toFixed(2)} bps` : '-'}
                       </div>
+                      {/* Cost breakdown tooltip */}
+                      {spread && netPnl != null && (() => {
+                        const grossBps = Math.max(
+                          Math.abs(spread.long_spread) * 10000,
+                          Math.abs(spread.short_spread) * 10000
+                        );
+                        return (
+                          <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-10
+                            bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono
+                            whitespace-nowrap shadow-lg">
+                            <div className="text-gray-300">Gross: {grossBps.toFixed(2)} bps</div>
+                            <div className="text-red-400/70">Fees: -2.00 bps <span className="text-gray-600">(Bybit)</span></div>
+                            <div className="text-red-400/70">Slip: -1.00 bps <span className="text-gray-600">(est.)</span></div>
+                            <div className="border-t border-gray-700 mt-1 pt-1">
+                              <span className={netPnl > 0 ? 'text-green-400' : 'text-red-400'}>
+                                Net: {netPnl > 0 ? '+' : ''}{netPnl.toFixed(2)} bps
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div>
                       <span className="text-gray-500">Z-Score</span>
-                      <div className="font-mono text-gray-300">{zs}</div>
+                      <div className={`font-mono ${zsColor(d?.zscore)}`}>{zs}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Imbalance</span>
+                      <div className="font-mono">
+                        <span className={imbColor(d?.imbalance_bybit)}>B:{fmtImb(d?.imbalance_bybit)}</span>
+                        {' '}
+                        <span className={imbColor(d?.imbalance_lighter)}>L:{fmtImb(d?.imbalance_lighter)}</span>
+                      </div>
                     </div>
                     <div>
                       <span className="text-gray-500">Basis</span>

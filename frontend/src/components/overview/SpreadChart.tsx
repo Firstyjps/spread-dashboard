@@ -83,6 +83,7 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
   // Convert percentile stats to bps (same unit as chart Y-axis)
   const p10Bps = stats?.p10 != null ? +(stats.p10 * 10000).toFixed(2) : null;
   const p90Bps = stats?.p90 != null ? +(stats.p90 * 10000).toFixed(2) : null;
+  const meanBps = stats?.mean != null ? +(stats.mean * 10000).toFixed(2) : null;
   const showPercentiles = p10Bps != null && p90Bps != null;
 
   // Convert to bps + downsample if too many points
@@ -251,6 +252,16 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                     strokeDasharray="6 3"
                     strokeWidth={1}
                     label={{ value: `P90 ${p90Bps}`, position: 'insideTopRight', fill: '#a78bfa', fontSize: 10 }}
+                    ifOverflow="extendDomain"
+                  />
+                )}
+                {meanBps != null && (
+                  <ReferenceLine
+                    y={meanBps}
+                    stroke="#fbbf24"
+                    strokeDasharray="4 4"
+                    strokeWidth={1}
+                    label={{ value: `\u03BC ${meanBps}`, position: 'insideTopLeft', fill: '#fbbf24', fontSize: 10 }}
                     ifOverflow="extendDomain"
                   />
                 )}
