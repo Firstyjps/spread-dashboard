@@ -386,24 +386,7 @@ async def smart_execute_maker(
             if not should_reprice:
                 continue
 
-            # ── Cancel + Replace ──
-            if current_order_id:
-                try:
-                    await client.cancel_order(symbol, current_order_id)
-                    result.cancel_count += 1
-                except Exception:
-                    # Order might already be filled — poll again
-                    status = await client.get_order_status(symbol, current_order_id)
-                    if status["status"] == "Filled":
-                        total_filled = status["filled_qty"]
-                        if status["avg_price"] > 0:
-                            vwap_num = status["avg_price"] * total_filled
-                        result.status = "filled"
-                        result.filled_qty = total_filled
-                        result.remaining_qty = Decimal("0")
-                        break
-                    continue
-
+            # ── Atomic Reprice via amend_order ──
             remaining = round_qty_to_step(target_qty - total_filled, qty_step)
             if remaining < min_qty:
                 result.status = "filled"
@@ -412,29 +395,67 @@ async def smart_execute_maker(
                 break
 
             price = new_price
-            postonly_retries = 0
-            while postonly_retries < 3:
-                try:
-                    resp = await client.place_limit_postonly(symbol, side, str(remaining), str(price))
-                    current_order_id = resp["order_id"]
-                    result.order_count += 1
-                    result.reprice_count += 1
-                    stall_count = 0
-                    log.info("maker_repriced", price=str(price), remaining=str(remaining),
-                             reprice=reprice_i + 1, mode=new_mode)
+
+            if current_order_id:
+                amend_retries = 0
+                amend_success = False
+                while amend_retries < 3:
+                    try:
+                        await client.amend_order(
+                            symbol, current_order_id,
+                            price=str(price), qty=str(remaining),
+                        )
+                        result.reprice_count += 1
+                        stall_count = 0
+                        amend_success = True
+                        log.info("maker_amended", price=str(price), remaining=str(remaining),
+                                 reprice=reprice_i + 1, mode=new_mode)
+                        break
+                    except Exception as e:
+                        err_msg = str(e).lower()
+                        if "post only" in err_msg or "would take" in err_msg or "140024" in err_msg:
+                            # Amend rejected because new price would cross — shift away
+                            result.maker_reject_count += 1
+                            price = _shift_away(price, tick, side)
+                            amend_retries += 1
+                            log.info("maker_amend_shift", new_price=str(price), retry=amend_retries)
+                        elif "order not exist" in err_msg or "110001" in err_msg:
+                            # Order already filled or cancelled — check status
+                            status = await client.get_order_status(symbol, current_order_id)
+                            if status["status"] == "Filled":
+                                total_filled = status["filled_qty"]
+                                if status["avg_price"] > 0:
+                                    vwap_num = status["avg_price"] * total_filled
+                                result.status = "filled"
+                                result.filled_qty = total_filled
+                                result.remaining_qty = Decimal("0")
+                            amend_success = True  # exit retry loop
+                            break
+                        else:
+                            # Unknown error — fall back to cancel+replace
+                            log.warning("maker_amend_fallback", error=str(e))
+                            try:
+                                await client.cancel_order(symbol, current_order_id)
+                                result.cancel_count += 1
+                            except Exception:
+                                pass
+                            try:
+                                resp = await client.place_limit_postonly(symbol, side, str(remaining), str(price))
+                                current_order_id = resp["order_id"]
+                                result.order_count += 1
+                                result.reprice_count += 1
+                                stall_count = 0
+                                amend_success = True
+                                log.info("maker_repriced_fallback", price=str(price), remaining=str(remaining))
+                            except Exception:
+                                pass
+                            break
+
+                if result.status == "filled":
                     break
-                except Exception as e:
-                    err_msg = str(e).lower()
-                    if "post only" in err_msg or "would take" in err_msg or "140024" in err_msg:
-                        result.maker_reject_count += 1
-                        price = _shift_away(price, tick, side)
-                        postonly_retries += 1
-                        log.info("maker_postonly_shift", new_price=str(price), retry=postonly_retries)
-                    else:
-                        raise
-            else:
-                log.warning("maker_postonly_exhausted", retries=3)
-                continue
+                if not amend_success:
+                    log.warning("maker_amend_exhausted", retries=3)
+                    continue
 
         # ── 8. Timeout / market fallback ──
         elapsed_ms = (time.time() - t_start) * 1000

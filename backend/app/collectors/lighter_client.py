@@ -155,8 +155,8 @@ class LighterClient:
                 f"Amount {amount} below Lighter minimum {min_base} for {symbol}"
             )
 
-        # Slippage protection: ±2%
-        worst_price = current_price * 1.02 if not is_ask else current_price * 0.98
+        # Slippage protection: ±1% (tighter guard = better fill prices)
+        worst_price = current_price * 1.01 if not is_ask else current_price * 0.99
         scaled_amount = int(round(float(amount) * s_scale))
         scaled_price = int(round(float(worst_price) * p_scale))
 

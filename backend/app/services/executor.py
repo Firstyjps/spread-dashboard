@@ -115,9 +115,24 @@ class ArbitrageExecutor:
                     f"Both exchanges failed! Lighter: {lighter_res} | Bybit: {bybit_res}"
                 )
 
-            # Log maker engine telemetry
+            # Log maker engine telemetry + fee savings
             if hasattr(bybit_res, "to_dict"):
-                log.info("arb_bybit_maker_result", **bybit_res.to_dict())
+                maker_data = bybit_res.to_dict()
+                log.info("arb_bybit_maker_result", **maker_data)
+
+                # Calculate fee savings vs pure taker execution
+                if bybit_res.avg_price > 0 and bybit_res.filled_qty > 0:
+                    taker_cost = float(bybit_res.filled_qty * bybit_res.avg_price) * self.maker_config.taker_fee_rate
+                    actual_cost = float(bybit_res.estimated_fee)
+                    saved = taker_cost - actual_cost
+                    log.info("arb_fee_savings",
+                             symbol=symbol,
+                             taker_would_cost=round(taker_cost, 4),
+                             actual_cost=round(actual_cost, 4),
+                             saved_usd=round(saved, 4),
+                             fill_rate_pct=round(float(bybit_res.filled_qty) / amount * 100, 1),
+                             time_ms=round(bybit_res.time_to_fill_ms, 1),
+                             status=bybit_res.status)
 
             log.info("arb_execution_success", lighter=str(lighter_res), bybit=str(bybit_res))
             return results

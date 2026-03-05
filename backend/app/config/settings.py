@@ -49,9 +49,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # Maker Engine (Bybit PostOnly LIMIT execution)
-    maker_max_time_s: float = 15.0
-    maker_reprice_interval_ms: int = 800
-    maker_max_reprices: int = 8
+    maker_max_time_s: float = 20.0
+    maker_reprice_interval_ms: int = 500
+    maker_max_reprices: int = 12
     maker_aggressiveness: str = "BALANCED"
     maker_allow_market_fallback: bool = True
     maker_fee_rate: float = 0.0002
