@@ -24,7 +24,7 @@ Built for cross-exchange arbitrage research and monitoring.
 
 - Python 3.12+ (3.13 recommended)
 - Node.js 18+
-- npm
+- npm 
 
 ### 1. Backend
 
