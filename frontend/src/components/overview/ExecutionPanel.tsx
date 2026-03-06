@@ -39,7 +39,7 @@ function saveTradeLog(logs: TradeLog[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(logs.slice(0, 50)));
 }
 
-function formatNum(n: number | undefined, decimals = 2): string {
+function formatNum(n: number | undefined, decimals = 3): string {
   if (n == null || isNaN(n)) return '–';
   return n.toLocaleString(undefined, {
     minimumFractionDigits: decimals,

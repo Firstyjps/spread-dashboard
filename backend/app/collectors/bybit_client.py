@@ -19,8 +19,13 @@ class BybitClient:
             testnet=False,
             api_key=config.bybit_api_key,
             api_secret=config.bybit_api_secret,
-            domain="bytick"
+            domain="bytick",
+            recv_window=5000,
         )
+        # Set socket-level timeout on the underlying requests.Session
+        # to prevent zombie threads when Bybit API is unresponsive
+        if hasattr(self.session, 'client'):
+            self.session.client.timeout = 10
 
     async def get_position(self, symbol: str) -> dict:
         """Get current position for a symbol.
@@ -94,7 +99,7 @@ class BybitClient:
             return {"status": "success", "order_id": order_id, "response": response}
         except asyncio.TimeoutError:
             log.error("bybit_order_timeout", symbol=symbol, side=side)
-            raise Exception(f"Bybit order timed out after {_SDK_TIMEOUT}s")
+            raise Exception("Bybit order timed out after 10s")
         except Exception as e:
             log.error("bybit_order_error", symbol=symbol, error=str(e))
             raise

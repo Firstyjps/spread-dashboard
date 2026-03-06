@@ -1,6 +1,7 @@
 """
 REST API routes for the Spread Dashboard.
 """
+import asyncio
 import csv
 import io
 import structlog
@@ -14,6 +15,7 @@ from app.analytics.spread_engine import get_all_current_data, get_latest_tick, c
 from app.analytics.cost_model import estimate_net_pnl_bps
 from app.collectors import bybit_collector, lighter_collector
 from app.collectors.bybit_client import BybitClient
+from app.collectors.lighter_client import LighterClient
 from app.storage.database import get_recent_spreads, get_spreads_by_time, get_recent_alerts
 from app.config import settings
 from app.utils.percentiles import compute_percentiles
@@ -171,14 +173,40 @@ SIDE_MAP = {
 }
 
 
+# --- Shared clients for read-only endpoints (reused across requests) ---
+_shared_bybit_client: Optional[BybitClient] = None
+_shared_lighter_client: Optional[LighterClient] = None
+
+
+def _get_shared_bybit() -> BybitClient:
+    global _shared_bybit_client
+    if _shared_bybit_client is None:
+        _shared_bybit_client = BybitClient(settings)
+    return _shared_bybit_client
+
+
+def _get_shared_lighter() -> LighterClient:
+    global _shared_lighter_client
+    if _shared_lighter_client is None:
+        _shared_lighter_client = LighterClient(settings)
+    return _shared_lighter_client
+
+
 @router.get("/positions")
 async def get_positions(symbol: str = "BTCUSDT"):
     """Get current positions on both exchanges for a symbol."""
     try:
-        async with ArbitrageExecutor(settings) as executor:
-            bybit_pos = await executor.bybit.get_position(symbol)
-            lighter_pos = await executor.lighter.get_position(symbol)
-            return {"symbol": symbol, "bybit": bybit_pos, "lighter": lighter_pos}
+        bybit_pos, lighter_pos = await asyncio.wait_for(
+            asyncio.gather(
+                _get_shared_bybit().get_position(symbol),
+                _get_shared_lighter().get_position(symbol),
+            ),
+            timeout=15.0,
+        )
+        return {"symbol": symbol, "bybit": bybit_pos, "lighter": lighter_pos}
+    except asyncio.TimeoutError:
+        log.error("get_positions_timeout", symbol=symbol)
+        raise HTTPException(status_code=504, detail="Position query timed out")
     except Exception as e:
         log.error("get_positions_error", symbol=symbol, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -192,14 +220,24 @@ async def execute_trade(req: TradeRequest):
         async with ArbitrageExecutor(settings) as executor:
             results = await executor.run_arb(req.symbol, mapped_side, req.amount)
 
-            for res in results:
-                if isinstance(res, Exception):
-                    raise HTTPException(status_code=500, detail=f"Execution Failed: {str(res)}")
+            lighter_res, bybit_res = results[0], results[1]
+
+            # Bybit aborted or below threshold (no positions opened)
+            if lighter_res is None:
+                bybit_detail = bybit_res.to_dict() if hasattr(bybit_res, "to_dict") else str(bybit_res)
+                status = "aborted" if hasattr(bybit_res, "status") and bybit_res.status == "aborted" else "below_threshold"
+                return {
+                    "status": status,
+                    "detail": f"Bybit {status}: {bybit_res.detail if hasattr(bybit_res, 'detail') else 'fill below threshold'}",
+                    "bybit": bybit_detail,
+                }
 
             return {
                 "status": "success",
-                "detail": f"Atomic Arb triggered for {req.symbol} ({mapped_side}, qty={req.amount})",
-                "results": str(results),
+                "detail": f"Sequential Arb for {req.symbol} ({mapped_side}, qty={req.amount})",
+                "bybit": bybit_res.to_dict() if hasattr(bybit_res, "to_dict") else str(bybit_res),
+                "lighter": str(lighter_res),
+                "matched_qty": str(bybit_res.filled_qty) if hasattr(bybit_res, "filled_qty") else str(req.amount),
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

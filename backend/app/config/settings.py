@@ -49,9 +49,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # Maker Engine (Bybit PostOnly LIMIT execution)
-    maker_max_time_s: float = 20.0
-    maker_reprice_interval_ms: int = 500
-    maker_max_reprices: int = 12
+    maker_max_time_s: float = 90.0
+    maker_reprice_interval_ms: int = 2000
+    maker_max_reprices: int = 60
     maker_aggressiveness: str = "BALANCED"
     maker_allow_market_fallback: bool = True
     maker_fee_rate: float = 0.0002
@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     maker_vol_window: int = 20
     maker_vol_limit_ticks: int = 10
     maker_max_deviation_ticks: int = 50
+
+    # Arbitrage execution (sequential Bybit-first mode)
+    arb_maker_only: bool = True        # Disable market fallback — maker fees only
+    arb_min_fill_pct: float = 10.0     # Minimum Bybit fill % before executing Lighter
 
     # Iceberg Executor (Bybit GTC LIMIT synthetic iceberg)
     iceberg_child_qty: float = 0.001

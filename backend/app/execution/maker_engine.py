@@ -383,6 +383,11 @@ async def smart_execute_maker(
             price_moved = abs(new_price - price) >= 2 * tick
             should_reprice = price_moved or stall_count >= config.stall_intervals
 
+            # Skip amend if price hasn't actually changed (common in 1-tick spread markets)
+            if new_price == price:
+                if not price_moved:
+                    continue
+
             if not should_reprice:
                 continue
 
