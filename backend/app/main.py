@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.routes import router
+from app.portfolio.router import router as portfolio_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
 from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data, close_db, commit as db_commit
@@ -208,6 +209,7 @@ app.add_middleware(
 
 # Include REST routes
 app.include_router(router)
+app.include_router(portfolio_router)
 
 
 # Pre-serialized static message — avoids json.dumps on every ping

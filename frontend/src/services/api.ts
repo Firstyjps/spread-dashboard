@@ -48,6 +48,7 @@ export const api = {
   exportCsvUrl: (symbol: string, minutes = 60) =>
     `${BASE}/spreads/export?symbol=${symbol}&minutes=${minutes}`,
 
+  portfolio: () => fetchJSON<any>('/portfolio'),
   positions: (symbol: string) => fetchJSON<any>(`/positions?symbol=${symbol}`),
 
   executeArb: (symbol: string, side: 'LONG_LIGHTER' | 'SHORT_LIGHTER', amount: number) =>
