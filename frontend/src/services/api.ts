@@ -65,4 +65,10 @@ export const api = {
 
   closePositions: (symbol: string) =>
     postJSON<any>('/execute/close_all', { symbol }, EXECUTE_TIMEOUT_MS),
+
+  // Auto-Hedge
+  autoHedgeStatus: () => fetchJSON<any>('/auto-hedge/status'),
+  autoHedgeStart: (config: { symbol: string; poll_interval_s: number; min_delta: number }) =>
+    postJSON<any>('/auto-hedge/start', config),
+  autoHedgeStop: () => postJSON<any>('/auto-hedge/stop', {}),
 };

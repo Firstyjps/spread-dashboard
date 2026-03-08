@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { SpreadChart } from './SpreadChart';
 import { ExecutionPanel } from './ExecutionPanel';
+import { AutoHedgePanel } from './AutoHedgePanel';
 import type { SymbolData, SymbolDataMap, Alert } from '../../types/api';
 
 interface Props {
@@ -185,6 +186,9 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
           {filteredSymbols.length}/{allSymbols.length} selected
         </div>
       </section>
+
+      {/* Auto-Hedge Monitor */}
+      <AutoHedgePanel />
 
       {/* Price Cards */}
       {filteredSymbols.length > 0 && (
