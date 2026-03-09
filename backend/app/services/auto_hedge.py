@@ -147,7 +147,8 @@ class AutoHedgeService:
 
     async def start(self, symbol: str = "BTCUSDT",
                     poll_interval_s: float = 2.0,
-                    min_delta: float = 0.001):
+                    min_delta: float = 0.001,
+                    **kwargs):
         if self._running:
             raise RuntimeError("Auto-hedge already running")
 
@@ -199,6 +200,8 @@ class AutoHedgeService:
         if self._lighter:
             await self._lighter.close()
             self._lighter = None
+        if self._bybit and hasattr(self._bybit, 'close'):
+            await self._bybit.close()
         self._bybit = None
 
         log.info("auto_hedge_stopped", symbol=self._symbol)
@@ -207,6 +210,7 @@ class AutoHedgeService:
         return {
             "running": self._running,
             "symbol": self._symbol,
+            "source_exchange": "bybit",
             "poll_interval_s": self._poll_interval_s,
             "min_delta": self._min_delta,
             "last_signed_position": self._last_signed_pos,

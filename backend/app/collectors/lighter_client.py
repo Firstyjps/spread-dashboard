@@ -10,7 +10,7 @@ import lighter
 import structlog
 from typing import Optional
 from app.analytics.spread_engine import get_all_current_data
-from app.collectors.lighter_collector import SYMBOL_TO_MARKET_ID, MARKET_META
+from app.collectors.lighter_collector import SYMBOL_TO_MARKET_ID, MARKET_META, get_market_stats
 
 log = structlog.get_logger()
 
@@ -95,6 +95,17 @@ class LighterClient:
             pnl = float(pos.get("unrealized_pnl", "0"))
             realized_pnl = float(pos.get("realized_pnl", "0"))
             funding_paid = float(pos.get("total_funding_paid_out", "0"))
+            liq_price = float(pos.get("liquidation_price", "0"))
+
+            # Look up mark price from WebSocket cache
+            mark_price = None
+            if expected_market_id is not None:
+                stats = get_market_stats(expected_market_id)
+                if stats:
+                    try:
+                        mark_price = float(stats.get("mark_price", 0)) or None
+                    except (ValueError, TypeError):
+                        pass
 
             return {
                 "amount": raw_size,
@@ -103,6 +114,8 @@ class LighterClient:
                 "pnl": pnl,
                 "realized_pnl": realized_pnl,
                 "funding_paid": funding_paid,
+                "mark_price": mark_price,
+                "liq_price": liq_price or None,
             }
 
         except Exception as e:

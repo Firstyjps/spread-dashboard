@@ -191,6 +191,77 @@ def _get_rate_lock() -> asyncio.Lock:
     return _rate_lock
 
 
+# ---------- Market Stats WebSocket cache (mark/index prices) ----------
+_market_stats_cache: Dict[int, Dict[str, Any]] = {}  # market_id → {mark_price, index_price, ...}
+_market_stats_task: Optional[asyncio.Task] = None
+_market_stats_ws = None
+
+
+async def _market_stats_loop():
+    """Background WebSocket loop: subscribe to market_stats for all tracked markets."""
+    global _market_stats_ws
+    ws_url = settings.lighter_ws_url  # wss://mainnet.zklighter.elliot.ai/stream
+    while True:
+        try:
+            session = await _get_session()
+            async with session.ws_connect(ws_url, heartbeat=30) as ws:
+                _market_stats_ws = ws
+                # Subscribe to all markets
+                await ws.send_json({"type": "subscribe", "channel": "market_stats/all"})
+
+                async for msg in ws:
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        data = msg.json()
+                        if data.get("type") == "update/market_stats":
+                            channel = data.get("channel", "")
+                            raw = data.get("market_stats", {})
+                            if "all" in channel:
+                                # market_stats:all → dict keyed by market_id string
+                                for mid_str, stats in raw.items():
+                                    try:
+                                        _market_stats_cache[int(mid_str)] = stats
+                                    except (ValueError, TypeError):
+                                        pass
+                            else:
+                                # Single market → direct object
+                                mid = raw.get("market_id")
+                                if mid is not None:
+                                    _market_stats_cache[mid] = raw
+                    elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                        break
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("lighter_market_stats_ws_error", error=str(e))
+        _market_stats_ws = None
+        await asyncio.sleep(3)  # reconnect delay
+
+
+def start_market_stats_ws():
+    """Start the background WebSocket task (call once at startup)."""
+    global _market_stats_task
+    if _market_stats_task is None or _market_stats_task.done():
+        _market_stats_task = asyncio.create_task(_market_stats_loop())
+
+
+async def stop_market_stats_ws():
+    """Stop the background WebSocket task."""
+    global _market_stats_task, _market_stats_ws
+    if _market_stats_task and not _market_stats_task.done():
+        _market_stats_task.cancel()
+        try:
+            await _market_stats_task
+        except asyncio.CancelledError:
+            pass
+    _market_stats_task = None
+    _market_stats_ws = None
+
+
+def get_market_stats(market_id: int) -> Optional[Dict[str, Any]]:
+    """Get cached market stats for a market_id."""
+    return _market_stats_cache.get(market_id)
+
+
 # ---------- Ticker ----------
 async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
     global _rate_limited_until, _429_count
@@ -248,6 +319,25 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
                 if best_bid <= 0 or best_ask <= 0:
                     return None
 
+                # Look up cached mark/index price from WebSocket
+                mark_price = None
+                index_price = None
+                last_price = None
+                stats = get_market_stats(market_id)
+                if stats:
+                    try:
+                        mark_price = float(stats.get("mark_price", 0)) or None
+                    except (ValueError, TypeError):
+                        pass
+                    try:
+                        index_price = float(stats.get("index_price", 0)) or None
+                    except (ValueError, TypeError):
+                        pass
+                    try:
+                        last_price = float(stats.get("last_trade_price", 0)) or None
+                    except (ValueError, TypeError):
+                        pass
+
                 return NormalizedTick(
                     ts=time.time() * 1000,
                     exchange="lighter",
@@ -258,6 +348,9 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
                     bid_size=bid_size or None,
                     ask_size=ask_size or None,
                     mid=(best_bid + best_ask) / 2,
+                    mark_price=mark_price,
+                    index_price=index_price,
+                    last_price=last_price,
                 )
 
     except Exception as e:

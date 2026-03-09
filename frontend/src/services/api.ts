@@ -71,4 +71,11 @@ export const api = {
   autoHedgeStart: (config: { symbol: string; poll_interval_s: number; min_delta: number }) =>
     postJSON<any>('/auto-hedge/start', config),
   autoHedgeStop: () => postJSON<any>('/auto-hedge/stop', {}),
+
+  // SL/TP
+  slTpStatus: () => fetchJSON<any>('/sl-tp/status'),
+  slTpStart: (config: { symbol: string; sl_delta: number; tp_delta: number; poll_interval_s?: number }) =>
+    postJSON<any>('/sl-tp/start', config),
+  slTpStop: () => postJSON<any>('/sl-tp/stop', {}),
+  slTpReset: () => postJSON<any>('/sl-tp/reset', {}),
 };

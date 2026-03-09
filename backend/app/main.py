@@ -18,6 +18,7 @@ from app.config import settings
 from app.api.routes import router
 from app.portfolio.router import router as portfolio_router
 from app.api.auto_hedge_routes import router as auto_hedge_router
+from app.api.sl_tp_routes import router as sl_tp_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
 from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data, close_db, commit as db_commit
@@ -52,7 +53,7 @@ async def poll_loop():
     while True:
         t0 = time.time()
         try:
-            # Fetch ALL symbols from BOTH exchanges — with 10s timeout
+            # Fetch ALL symbols from ALL exchanges — with 10s timeout
             tasks = []
             for symbol in symbols:
                 tasks.append(bybit_collector.fetch_ticker(symbol, category="linear"))
@@ -165,6 +166,9 @@ async def lifespan(app: FastAPI):
     if deleted > 0:
         log.info("db_cleanup_on_startup", rows_deleted=deleted)
 
+    # Start Lighter WebSocket for mark/index prices
+    lighter_collector.start_market_stats_ws()
+
     # Start background polling with supervision (auto-restart on crash)
     global _poll_task
     _poll_task = asyncio.create_task(_supervised_poll_loop())
@@ -184,8 +188,14 @@ async def lifespan(app: FastAPI):
     _hedge_svc = get_auto_hedge_service()
     if _hedge_svc._running:
         await _hedge_svc.stop()
+    # Stop SL/TP if running
+    from app.services.sl_tp import get_sl_tp_service
+    _sltp_svc = get_sl_tp_service()
+    if _sltp_svc._running:
+        await _sltp_svc.stop()
 
     # Close persistent HTTP sessions + DB
+    await lighter_collector.stop_market_stats_ws()
     await bybit_collector.close_session()
     await lighter_collector.close_session()
     await close_telegram_session()
@@ -218,6 +228,7 @@ app.add_middleware(
 app.include_router(router)
 app.include_router(portfolio_router)
 app.include_router(auto_hedge_router)
+app.include_router(sl_tp_router)
 
 
 # Pre-serialized static message — avoids json.dumps on every ping

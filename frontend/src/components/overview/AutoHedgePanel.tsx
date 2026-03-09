@@ -15,6 +15,7 @@ interface HedgeEntry {
 interface HedgeStatus {
   running: boolean;
   symbol: string;
+  source_exchange: string;
   poll_interval_s: number;
   min_delta: number;
   last_signed_position: number | null;
@@ -113,8 +114,9 @@ export const AutoHedgePanel = React.memo(function AutoHedgePanel() {
             <span className="text-white">{status.symbol}</span>
           </div>
           <div>
-            <span className="text-gray-500">Poll:</span>{' '}
-            <span className="text-gray-300">{status.poll_interval_s}s</span>
+            <span className="text-gray-500">Source:</span>{' '}
+            <span className="text-yellow-400">BYBIT</span>
+            <span className="text-gray-600 ml-1">({status.poll_interval_s}s)</span>
           </div>
           <div>
             <span className="text-gray-500">Bybit Pos:</span>{' '}

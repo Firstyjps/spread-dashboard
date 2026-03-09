@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../services/api';
 
 interface Props {
@@ -127,6 +127,65 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
     }
   };
 
+  // SL/TP state
+  const [slTpStatus, setSlTpStatus] = useState<any>(null);
+  const [slTpEditing, setSlTpEditing] = useState(false);
+  const [slInput, setSlInput] = useState('300');
+  const [tpInput, setTpInput] = useState('300');
+  const [slTpLoading, setSlTpLoading] = useState(false);
+  const alertedRef = useRef(false);
+
+  const fetchSlTp = useCallback(async () => {
+    try {
+      const data = await api.slTpStatus();
+      setSlTpStatus(data);
+      // Sound alert on trigger
+      if (data.triggered && !alertedRef.current) {
+        alertedRef.current = true;
+        try {
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = data.trigger_type === 'SL' ? 440 : 880;
+          gain.gain.value = 0.3;
+          osc.start();
+          setTimeout(() => { osc.stop(); ctx.close(); }, 500);
+        } catch {}
+      }
+      if (!data.triggered) alertedRef.current = false;
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchSlTp();
+    const iv = setInterval(fetchSlTp, 2000);
+    return () => clearInterval(iv);
+  }, [fetchSlTp]);
+
+  const handleSlTpSet = async () => {
+    const sl = parseFloat(slInput) || 0;
+    const tp = parseFloat(tpInput) || 0;
+    if (sl <= 0 && tp <= 0) return;
+    setSlTpLoading(true);
+    try {
+      await api.slTpStart({ symbol, sl_delta: sl, tp_delta: tp });
+      await fetchSlTp();
+      setSlTpEditing(false);
+    } catch {}
+    setSlTpLoading(false);
+  };
+
+  const handleSlTpCancel = async () => {
+    setSlTpLoading(true);
+    try {
+      await api.slTpStop();
+      await fetchSlTp();
+    } catch {}
+    setSlTpLoading(false);
+  };
+
   const netPnl = (bybitPos?.pnl || 0) + (lighterPos?.pnl || 0);
   const hasPosition = (bybitPos?.amount || 0) > 0 || (lighterPos?.amount || 0) > 0;
 
@@ -163,6 +222,135 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
       {posError && (
         <p className="text-xs text-yellow-500">{posError}</p>
       )}
+
+      {/* TP / SL Inline */}
+      {hasPosition && (() => {
+        const running = slTpStatus?.running;
+        const triggered = slTpStatus?.triggered;
+        const entryP = slTpStatus?.entry_price;
+        const slPrice = entryP && slTpStatus?.sl_delta ? entryP - slTpStatus.sl_delta : null;
+        const tpPrice = entryP && slTpStatus?.tp_delta ? entryP + slTpStatus.tp_delta : null;
+
+        return (
+          <div className={`border rounded-lg px-3 py-2 ${
+            triggered ? 'border-yellow-500/70 bg-yellow-900/10' : 'border-gray-700/50 bg-gray-800/30'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400 font-semibold">TP / SL</span>
+              <div className="flex items-center gap-2">
+                {triggered ? (
+                  <span className="text-xs font-bold text-yellow-400">
+                    {slTpStatus.trigger_type} TRIGGERED
+                  </span>
+                ) : running ? (
+                  <span className="text-xs font-mono text-gray-300">
+                    <span className="text-green-400">{tpPrice != null ? formatNum(tpPrice) : '–'}</span>
+                    {' / '}
+                    <span className="text-red-400">{slPrice != null ? formatNum(slPrice) : '–'}</span>
+                  </span>
+                ) : (
+                  <span className="text-xs font-mono text-gray-600">– / –</span>
+                )}
+
+                {/* Edit / Cancel button */}
+                {triggered ? (
+                  <button
+                    onClick={async () => {
+                      alertedRef.current = false;
+                      try { await api.slTpReset(); } catch {}
+                      await fetchSlTp();
+                    }}
+                    className="text-gray-500 hover:text-gray-300 p-1"
+                    title="Dismiss"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                ) : running ? (
+                  <button
+                    onClick={handleSlTpCancel}
+                    disabled={slTpLoading}
+                    className="text-red-500 hover:text-red-400 p-1"
+                    title="Cancel SL/TP"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSlTpEditing(!slTpEditing)}
+                    className="text-gray-500 hover:text-gray-300 p-1"
+                    title="Set TP/SL"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Edit mode: input fields */}
+            {slTpEditing && !running && !triggered && (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="text-[10px] text-green-400">TP +$</label>
+                  <input
+                    type="number"
+                    value={tpInput}
+                    onChange={(e) => setTpInput(e.target.value)}
+                    step="10"
+                    min="0"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white font-mono focus:border-green-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] text-red-400">SL -$</label>
+                  <input
+                    type="number"
+                    value={slInput}
+                    onChange={(e) => setSlInput(e.target.value)}
+                    step="10"
+                    min="0"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white font-mono focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={handleSlTpSet}
+                  disabled={slTpLoading}
+                  className="mt-3 bg-purple-600/30 hover:bg-purple-600/50 text-purple-400 border border-purple-600/50 px-3 py-1 rounded text-xs font-bold disabled:opacity-50"
+                >
+                  {slTpLoading ? '...' : 'SET'}
+                </button>
+              </div>
+            )}
+
+            {/* Progress bar when running */}
+            {running && entryP != null && slTpStatus?.last_mark_price != null && (
+              <div className="mt-1.5 flex items-center gap-1 text-[10px] font-mono">
+                <span className="text-red-400">{slPrice != null ? formatNum(slPrice, 0) : ''}</span>
+                <div className="flex-1 h-1.5 bg-gray-700 rounded-full relative overflow-hidden">
+                  {(() => {
+                    const range = (slTpStatus.sl_delta || 500) + (slTpStatus.tp_delta || 500);
+                    const dev = slTpStatus.last_mark_price - entryP;
+                    const pos = ((dev + (slTpStatus.sl_delta || 500)) / range) * 100;
+                    const clamped = Math.max(2, Math.min(98, pos));
+                    return (
+                      <div
+                        className={`absolute top-0 h-full w-1 rounded-full ${dev >= 0 ? 'bg-green-400' : 'bg-red-400'}`}
+                        style={{ left: `${clamped}%`, transform: 'translateX(-50%)' }}
+                      />
+                    );
+                  })()}
+                </div>
+                <span className="text-green-400">{tpPrice != null ? formatNum(tpPrice, 0) : ''}</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Order Section */}
       <div className="border-t border-gray-800 pt-3 space-y-2">

@@ -208,19 +208,43 @@ async def get_recent_spreads(symbol: str, limit: int = 500):
 
 
 async def get_spreads_by_time(symbol: str, minutes: int = 5, max_rows: int = 50000):
-    """Get spread data for the last N minutes (capped at max_rows)."""
+    """Get spread data for the last N minutes (downsampled to max_rows)."""
     since_ts = (time.time() - minutes * 60) * 1000
     db = await _get_db()
     db.row_factory = aiosqlite.Row
-    cursor = await db.execute(
-        """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
-                  lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
-                  short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
-                  basis_bybit, basis_bybit_bps, funding_diff, received_at
-           FROM spread_metrics
-           WHERE symbol = ? AND ts > ? ORDER BY ts ASC LIMIT ?""",
-        (symbol, since_ts, max_rows),
+
+    # Count total rows first to decide if downsampling is needed
+    cnt_cursor = await db.execute(
+        "SELECT COUNT(*) FROM spread_metrics WHERE symbol = ? AND ts > ?",
+        (symbol, since_ts),
     )
+    total = (await cnt_cursor.fetchone())[0]
+
+    if total <= max_rows:
+        # No downsampling needed
+        cursor = await db.execute(
+            """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
+                      lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
+                      short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
+                      basis_bybit, basis_bybit_bps, funding_diff, received_at
+               FROM spread_metrics
+               WHERE symbol = ? AND ts > ? ORDER BY ts ASC""",
+            (symbol, since_ts),
+        )
+    else:
+        # Downsample: take every Nth row using rowid modulo
+        step = total // max_rows + 1
+        cursor = await db.execute(
+            """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
+                      lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
+                      short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
+                      basis_bybit, basis_bybit_bps, funding_diff, received_at
+               FROM spread_metrics
+               WHERE symbol = ? AND ts > ? AND (id % ?) = 0
+               ORDER BY ts ASC""",
+            (symbol, since_ts, step),
+        )
+
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
 

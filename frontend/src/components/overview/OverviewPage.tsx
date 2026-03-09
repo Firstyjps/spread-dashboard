@@ -218,17 +218,19 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                       <span className={`w-2 h-2 rounded-full ${staleDot(d)}`} title="Feed freshness" />
                       <span className="font-mono font-bold text-lg text-emerald-400">{sym}</span>
                     </div>
-                    <span
-                      className={`font-mono text-xl font-bold ${
-                        isPositive ? 'text-green-400' : 'text-red-400'
-                      }`}
-                    >
-                      {spreadBps} <span className="text-xs text-gray-500">bps</span>
-                    </span>
+                    <div className="text-right">
+                      <span
+                        className={`font-mono text-xl font-bold ${
+                          isPositive ? 'text-green-400' : 'text-red-400'
+                        }`}
+                      >
+                        {spreadBps} <span className="text-xs text-gray-500">bps</span>
+                      </span>
+                    </div>
                   </div>
 
                   {/* Price row */}
-                  <div className="grid grid-cols-2 gap-4 mb-3">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Bybit Mid</div>
                       <div className="font-mono text-base">

@@ -9,6 +9,7 @@ Rules:
   Dead zone (30-60): no state change — prevents flapping.
 
 Cooldown: skip Telegram send if within telegram_alert_cooldown_s of last send.
+Flapping guard: after recovery, suppress re-alerts for 5 minutes.
 State always transitions immediately (reflects truth); only notification is suppressed.
 """
 import asyncio
@@ -122,13 +123,15 @@ class AlertState(Enum):
 
 class SymbolAlertState:
     """Tracks state machine for one symbol."""
-    __slots__ = ("state", "last_notified_ts", "last_metric_bps", "last_side")
+    __slots__ = ("state", "last_notified_ts", "last_metric_bps", "last_side",
+                 "last_recovery_ts")
 
     def __init__(self) -> None:
         self.state: AlertState = AlertState.NORMAL
         self.last_notified_ts: float = 0.0       # monotonic seconds
         self.last_metric_bps: float = 0.0
         self.last_side: str = ""
+        self.last_recovery_ts: float = 0.0       # monotonic time of last recovery
 
 
 # Per-symbol state (module-level singleton)
@@ -179,8 +182,15 @@ async def on_spread_update(spread: SpreadMetric) -> None:
     # Per-symbol thresholds (falls back to global defaults)
     upper_bps, lower_bps = settings.get_alert_thresholds(symbol)
 
+    # Flapping guard: after recovery, suppress re-alerts for 5 minutes
+    re_alert_cooldown = 300  # seconds
+
     if state.state == AlertState.NORMAL:
         if metric_bps >= upper_bps:
+            # Check flapping guard: if recently recovered, suppress re-alert
+            if state.last_recovery_ts > 0 and (now - state.last_recovery_ts) < re_alert_cooldown:
+                return
+
             # NORMAL -> ALERTING
             state.state = AlertState.ALERTING
             state.last_metric_bps = metric_bps
@@ -220,6 +230,7 @@ async def on_spread_update(spread: SpreadMetric) -> None:
             # ALERTING -> NORMAL
             state.state = AlertState.NORMAL
             state.last_metric_bps = metric_bps
+            state.last_recovery_ts = now
             log.info(
                 "spread_alert_recovered",
                 symbol=symbol,
