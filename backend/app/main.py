@@ -22,7 +22,7 @@ from app.api.sl_tp_routes import router as sl_tp_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
 from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data, close_db, commit as db_commit
-from app.alerts import on_spread_update, close_telegram_session
+from app.alerts import on_spread_update, close_telegram_session, start_telegram_bot
 
 log = structlog.get_logger()
 
@@ -31,8 +31,9 @@ log = structlog.get_logger()
 # None means "subscribe to all" (backward compatible default).
 ws_clients: dict[WebSocket, set[str] | None] = {}
 
-# --- Background task handle ---
+# --- Background task handles ---
 _poll_task: asyncio.Task | None = None
+_bot_task: asyncio.Task | None = None
 
 
 _consecutive_errors = 0
@@ -170,13 +171,22 @@ async def lifespan(app: FastAPI):
     lighter_collector.start_market_stats_ws()
 
     # Start background polling with supervision (auto-restart on crash)
-    global _poll_task
+    global _poll_task, _bot_task
     _poll_task = asyncio.create_task(_supervised_poll_loop())
+
+    # Start Telegram bot command listener
+    _bot_task = asyncio.create_task(start_telegram_bot())
 
     yield
 
     # Shutdown
     log.info("app_shutting_down")
+    if _bot_task:
+        _bot_task.cancel()
+        try:
+            await _bot_task
+        except asyncio.CancelledError:
+            pass
     if _poll_task:
         _poll_task.cancel()
         try:

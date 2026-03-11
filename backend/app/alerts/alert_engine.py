@@ -25,6 +25,7 @@ from app.config import settings
 from app.models import SpreadMetric, Alert
 from app.storage.database import insert_alert, commit as db_commit
 from app.alerts.telegram_notifier import send_telegram
+from app.alerts.telegram_bot import is_muted, get_runtime_threshold
 
 log = structlog.get_logger()
 
@@ -179,8 +180,12 @@ async def on_spread_update(spread: SpreadMetric) -> None:
     cooldown = settings.telegram_alert_cooldown_s
     ts_utc = datetime.fromtimestamp(spread.ts / 1000, tz=timezone.utc)
 
-    # Per-symbol thresholds (falls back to global defaults)
-    upper_bps, lower_bps = settings.get_alert_thresholds(symbol)
+    # Per-symbol thresholds: runtime override > .env override > global
+    runtime = get_runtime_threshold(symbol)
+    if runtime:
+        upper_bps, lower_bps = runtime
+    else:
+        upper_bps, lower_bps = settings.get_alert_thresholds(symbol)
 
     # Flapping guard: after recovery, suppress re-alerts for 5 minutes
     re_alert_cooldown = 300  # seconds
@@ -204,7 +209,7 @@ async def on_spread_update(spread: SpreadMetric) -> None:
                 metric_bps=round(metric_bps, 2),
                 side=side,
             )
-            if now - state.last_notified_ts >= cooldown:
+            if now - state.last_notified_ts >= cooldown and not is_muted():
                 state.last_notified_ts = now
                 msg = build_alert_message(
                     symbol=symbol,
@@ -236,7 +241,7 @@ async def on_spread_update(spread: SpreadMetric) -> None:
                 symbol=symbol,
                 metric_bps=round(metric_bps, 2),
             )
-            if now - state.last_notified_ts >= cooldown:
+            if now - state.last_notified_ts >= cooldown and not is_muted():
                 state.last_notified_ts = now
                 msg = build_recovery_message(
                     symbol=symbol,
