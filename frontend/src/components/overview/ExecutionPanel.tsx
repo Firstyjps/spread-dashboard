@@ -13,6 +13,22 @@ interface PositionData {
   mark_price?: number;
   liq_price?: number;
   leverage?: number;
+  funding_paid?: number;
+  realized_pnl?: number;
+}
+
+interface FundingData {
+  bybit_rate: number | null;
+  lighter_rate: number | null;
+  lighter_8h: number | null;
+  net_8h_rate: number | null;
+}
+
+interface TheoreticalData {
+  entry_bps: number | null;
+  current_bps: number | null;
+  diff_bps: number | null;
+  pnl_usd: number | null;
 }
 
 interface TradeLog {
@@ -58,15 +74,19 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
   const [loading, setLoading] = useState(false);
   const [bybitPos, setBybitPos] = useState<PositionData | null>(null);
   const [lighterPos, setLighterPos] = useState<PositionData | null>(null);
+  const [funding, setFunding] = useState<FundingData | null>(null);
+  const [theoretical, setTheoretical] = useState<TheoreticalData | null>(null);
   const [tradeLog, setTradeLog] = useState<TradeLog[]>(loadTradeLog);
   const [posError, setPosError] = useState('');
 
-  // Fetch positions every 5s
+  // Fetch positions every 5s (now includes funding + theoretical from backend)
   const fetchPositions = useCallback(async () => {
     try {
       const data = await api.positions(symbol);
       setBybitPos(data.bybit);
       setLighterPos(data.lighter);
+      setFunding(data.funding || null);
+      setTheoretical(data.theoretical || null);
       setPosError('');
     } catch (err: unknown) {
       setPosError(err instanceof Error ? err.message : 'Failed to fetch positions');
@@ -127,7 +147,7 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
     }
   };
 
-  // SL/TP state
+  // SL/TP state (upstream price-based approach)
   const [slTpStatus, setSlTpStatus] = useState<any>(null);
   const [slTpEditing, setSlTpEditing] = useState(false);
   const [slInput, setSlInput] = useState('300');
@@ -194,6 +214,9 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
     ? ((lighterPos.entry_price - bybitPos.entry_price) / bybitPos.entry_price) * 10000
     : null;
 
+  // Lighter funding paid (from API)
+  const lighterFundingPaid = lighterPos?.funding_paid || 0;
+
   return (
     <div className="bg-gray-900/60 border border-gray-800 rounded-lg p-4 space-y-4">
       {/* Header */}
@@ -212,6 +235,48 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
           </span>
         )}
       </div>
+
+      {/* Theoretical vs Exchange PnL comparison */}
+      {hasPosition && theoretical && theoretical.pnl_usd != null && (
+        <div className="bg-gray-800/40 rounded-lg p-2.5 grid grid-cols-2 gap-2 text-xs font-mono">
+          <div>
+            <span className="text-gray-500">Exchange PnL</span>
+            <div className={`font-bold ${netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {formatPnl(netPnl)}
+            </div>
+          </div>
+          <div>
+            <span className="text-gray-500">Theoretical PnL</span>
+            <div className={`font-bold ${theoretical.pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {formatPnl(theoretical.pnl_usd)}
+            </div>
+          </div>
+          <div>
+            <span className="text-gray-500">Spread Diff</span>
+            <div className={`${(theoretical.diff_bps || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {theoretical.diff_bps != null ? `${theoretical.diff_bps >= 0 ? '+' : ''}${theoretical.diff_bps.toFixed(2)} bps` : '–'}
+            </div>
+          </div>
+          <div>
+            <span className="text-gray-500">Funding Cost</span>
+            <div className={`${lighterFundingPaid <= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {lighterFundingPaid !== 0 ? `${lighterFundingPaid > 0 ? '-' : '+'}$${Math.abs(lighterFundingPaid).toFixed(3)}` : '–'}
+            </div>
+          </div>
+          {funding && funding.net_8h_rate != null && (
+            <div className="col-span-2 border-t border-gray-700 pt-1 mt-1">
+              <span className="text-gray-500">Funding Rate (net/8h): </span>
+              <span className={funding.net_8h_rate > 0 ? 'text-green-400' : 'text-red-400'}>
+                {funding.net_8h_rate > 0 ? '+' : ''}{(funding.net_8h_rate * 100).toFixed(4)}%
+                {' '}
+                <span className="text-gray-600">
+                  ({funding.net_8h_rate > 0 ? 'earning' : 'paying'})
+                </span>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Position Cards */}
       <div className="grid grid-cols-2 gap-3">
@@ -442,7 +507,7 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
                   <span className="text-gray-500">{log.amount}</span>
                 )}
                 <span className={log.status === 'success' ? 'text-green-500' : 'text-red-500'}>
-                  {log.status === 'success' ? '✅' : '❌'}
+                  {log.status === 'success' ? 'OK' : 'FAIL'}
                 </span>
                 <span className="text-gray-600 truncate flex-1">{log.detail}</span>
               </div>

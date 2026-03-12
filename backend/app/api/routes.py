@@ -12,7 +12,7 @@ from typing import Optional
 from decimal import Decimal
 from pydantic import BaseModel
 from app.analytics.spread_engine import get_all_current_data, get_latest_tick, compute_spread, compute_zscore
-from app.analytics.cost_model import estimate_net_pnl_bps
+from app.analytics.cost_model import estimate_net_pnl_bps, cost_breakdown
 from app.collectors import bybit_collector, lighter_collector
 from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
@@ -84,17 +84,20 @@ async def spreads(
 
     # Compute net PnL from current spread's dominant leg
     net_pnl_bps = None
+    costs = None
     if current:
         long_bps = abs(current.long_spread) * 10_000
         short_bps = abs(current.short_spread) * 10_000
         dominant_bps = max(long_bps, short_bps)
         net_pnl_bps = estimate_net_pnl_bps(dominant_bps)
+        costs = cost_breakdown(dominant_bps)
 
     return {
         "symbol": symbol,
         "current": current.model_dump() if current else None,
         "zscore": zscore,
         "net_pnl_bps": net_pnl_bps,
+        "cost_breakdown": costs,
         "history": history,
         "count": len(history),
         "stats": stats.to_dict(),
@@ -194,22 +197,93 @@ def _get_shared_lighter() -> LighterClient:
 
 @router.get("/positions")
 async def get_positions(symbol: str = "BTCUSDT"):
-    """Get current positions on both exchanges for a symbol."""
+    """Get current positions on both exchanges for a symbol, with funding & theoretical PnL."""
     try:
-        bybit_pos, lighter_pos = await asyncio.wait_for(
+        bybit_pos, lighter_pos, funding_data = await asyncio.wait_for(
             asyncio.gather(
                 _get_shared_bybit().get_position(symbol),
                 _get_shared_lighter().get_position(symbol),
+                _fetch_funding_for_position(symbol),
             ),
             timeout=15.0,
         )
-        return {"symbol": symbol, "bybit": bybit_pos, "lighter": lighter_pos}
+
+        # Compute theoretical PnL from spread difference
+        theoretical = _compute_theoretical_pnl(bybit_pos, lighter_pos, symbol)
+
+        return {
+            "symbol": symbol,
+            "bybit": bybit_pos,
+            "lighter": lighter_pos,
+            "funding": funding_data,
+            "theoretical": theoretical,
+        }
     except asyncio.TimeoutError:
         log.error("get_positions_timeout", symbol=symbol)
         raise HTTPException(status_code=504, detail="Position query timed out")
     except Exception as e:
         log.error("get_positions_error", symbol=symbol, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _fetch_funding_for_position(symbol: str) -> dict:
+    """Fetch funding rates and estimate 8h cost for current position."""
+    try:
+        bybit_f = await bybit_collector.fetch_funding_rate(symbol)
+        lighter_f = await lighter_collector.fetch_funding_rate(symbol)
+        bybit_rate = bybit_f.funding_rate if bybit_f else None
+        lighter_rate = lighter_f.funding_rate if lighter_f else None
+        # Lighter is 1h cycle, normalize to 8h for comparison
+        lighter_8h = lighter_rate * 8 if lighter_rate is not None else None
+        # Net: short Bybit receives when positive, long Lighter pays when positive
+        net_8h = (bybit_rate - lighter_8h) if (bybit_rate is not None and lighter_8h is not None) else None
+        return {
+            "bybit_rate": bybit_rate,
+            "lighter_rate": lighter_rate,
+            "lighter_8h": lighter_8h,
+            "net_8h_rate": net_8h,
+        }
+    except Exception as e:
+        log.warning("funding_fetch_for_position_failed", error=str(e))
+        return {"bybit_rate": None, "lighter_rate": None, "lighter_8h": None, "net_8h_rate": None}
+
+
+def _compute_theoretical_pnl(bybit_pos: dict, lighter_pos: dict, symbol: str) -> dict:
+    """Compute theoretical PnL based on entry spread vs current spread.
+
+    Theoretical $ = (entry_spread_bps - current_spread_bps) / 10000 * notional
+    This gives a clean view independent of each exchange's mark price drift.
+    """
+    bybit_entry = bybit_pos.get("entry_price", 0)
+    lighter_entry = lighter_pos.get("entry_price", 0)
+    bybit_amt = bybit_pos.get("amount", 0)
+    lighter_amt = lighter_pos.get("amount", 0)
+
+    if not (bybit_entry > 0 and lighter_entry > 0 and bybit_amt > 0):
+        return {"entry_bps": None, "current_bps": None, "diff_bps": None, "pnl_usd": None}
+
+    # Entry spread
+    entry_bps = (lighter_entry - bybit_entry) / bybit_entry * 10000
+
+    # Current spread from live data
+    spread = compute_spread(symbol)
+    if not spread:
+        return {"entry_bps": round(entry_bps, 2), "current_bps": None, "diff_bps": None, "pnl_usd": None}
+
+    current_bps = spread.exchange_spread_mid * 10000
+
+    # PnL = spread captured at entry minus current spread cost to close
+    diff_bps = entry_bps - current_bps
+    # Notional = avg of both sides
+    notional = (bybit_entry * bybit_amt + lighter_entry * lighter_amt) / 2
+    pnl_usd = diff_bps / 10000 * notional
+
+    return {
+        "entry_bps": round(entry_bps, 2),
+        "current_bps": round(current_bps, 2),
+        "diff_bps": round(diff_bps, 2),
+        "pnl_usd": round(pnl_usd, 4),
+    }
 
 
 @router.post("/execute")

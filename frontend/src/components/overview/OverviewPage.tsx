@@ -287,7 +287,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                             bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono
                             whitespace-nowrap shadow-lg">
                             <div className="text-gray-300">Gross: {grossBps.toFixed(2)} bps</div>
-                            <div className="text-red-400/70">Fees: -2.00 bps <span className="text-gray-600">(Bybit)</span></div>
+                            <div className="text-red-400/70">Fees: -{(grossBps - netPnl - 1.0).toFixed(2)} bps <span className="text-gray-600">(Bybit maker)</span></div>
                             <div className="text-red-400/70">Slip: -1.00 bps <span className="text-gray-600">(est.)</span></div>
                             <div className="border-t border-gray-700 mt-1 pt-1">
                               <span className={netPnl > 0 ? 'text-green-400' : 'text-red-400'}>
