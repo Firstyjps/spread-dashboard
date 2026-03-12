@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/v1/sl-tp", tags=["sl-tp"])
 
 
 class StartRequest(BaseModel):
-    symbol: str = "BTCUSDT"
+    symbol: str = "XAUTUSDT"
     sl_delta: float = 0.0  # price drop from entry to trigger SL (e.g. 300)
     tp_delta: float = 0.0  # price rise from entry to trigger TP (e.g. 300)
     poll_interval_s: float = 2.0

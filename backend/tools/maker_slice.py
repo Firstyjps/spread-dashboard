@@ -38,7 +38,7 @@ from app.execution.maker_slicer_linear import (
 
 def parse_args():
     p = argparse.ArgumentParser(description="Maker-Only sliced execution (PostOnly LIMIT)")
-    p.add_argument("--symbol", default="BTCUSDT", help="Trading pair")
+    p.add_argument("--symbol", default="XAUTUSDT", help="Trading pair")
     p.add_argument("--side", required=True, choices=["BUY", "SELL", "Buy", "Sell"],
                    help="Order side")
     p.add_argument("--target-usd", required=True, type=float, help="Total USD notional")

@@ -49,6 +49,7 @@ export const api = {
     }
     return fetchJSON<any>(`/spreads?${params}`);
   },
+  spreadsHistory: (symbol: string) => fetchJSON<any>(`/spreads/history?symbol=${symbol}`),
   funding: () => fetchJSON<any>('/funding'),
   alerts: (limit = 50) => fetchJSON<any>(`/alerts?limit=${limit}`),
   config: () => fetchJSON<any>('/config'),

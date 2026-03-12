@@ -21,7 +21,7 @@ from app.api.auto_hedge_routes import router as auto_hedge_router
 from app.api.sl_tp_routes import router as sl_tp_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
-from app.storage.database import init_db, insert_tick, insert_spread, cleanup_old_data, close_db, commit as db_commit
+from app.storage.database import init_db, insert_tick, insert_spread, close_db, commit as db_commit
 from app.alerts import on_spread_update, close_telegram_session, start_telegram_bot
 
 log = structlog.get_logger()
@@ -162,10 +162,8 @@ async def lifespan(app: FastAPI):
     # Load Lighter market ID mapping
     await lighter_collector.fetch_market_ids()
 
-    # Cleanup old data on startup (keep last 7 days)
-    deleted = await cleanup_old_data(days=7)
-    if deleted > 0:
-        log.info("db_cleanup_on_startup", rows_deleted=deleted)
+    # Data is preserved across restarts — no auto-cleanup.
+    # To manually purge old data, call: DELETE FROM spread_metrics WHERE ts < ?
 
     # Start Lighter WebSocket for mark/index prices
     lighter_collector.start_market_stats_ws()

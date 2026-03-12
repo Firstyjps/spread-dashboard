@@ -44,7 +44,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="LIMIT-only sliced execution on Bybit LINEAR perpetuals"
     )
-    parser.add_argument("--symbol", default="BTCUSDT", help="Trading pair")
+    parser.add_argument("--symbol", default="XAUTUSDT", help="Trading pair")
     parser.add_argument("--side", required=True, choices=["Buy", "Sell"], help="Order side")
     parser.add_argument("--qty", required=True, type=float, help="Total quantity")
     parser.add_argument("--slices", type=int, default=None, help="Number of slices")

@@ -145,7 +145,7 @@ class AutoHedgeService:
             if len(self._hedge_log) > MAX_HEDGE_LOG:
                 self._hedge_log = self._hedge_log[-MAX_HEDGE_LOG:]
 
-    async def start(self, symbol: str = "BTCUSDT",
+    async def start(self, symbol: str = "XAUTUSDT",
                     poll_interval_s: float = 2.0,
                     min_delta: float = 0.001,
                     **kwargs):

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     db_path: str = "./data/spread_dashboard.db"
 
     # Symbols
-    symbols: str = "BTCUSDT,ETHUSDT"
+    symbols: str = "XAUTUSDT"
 
     # Alert thresholds
     spread_alert_bps: float = 5.0

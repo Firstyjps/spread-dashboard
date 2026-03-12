@@ -6,8 +6,9 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { OverviewPage } from './components/overview/OverviewPage';
 import { HealthPage } from './components/health/HealthPage';
 import { PortfolioPage } from './components/portfolio/PortfolioPage';
+import { HistoryPage } from './components/history/HistoryPage';
 
-type Page = 'overview' | 'portfolio' | 'health';
+type Page = 'overview' | 'portfolio' | 'history' | 'health';
 
 // Flush buffered WS data to React state at this rate (~4fps)
 const WS_FLUSH_INTERVAL_MS = 250;
@@ -67,6 +68,9 @@ export default function App() {
           <NavBtn active={page === 'portfolio'} onClick={() => setPage('portfolio')}>
             Portfolio
           </NavBtn>
+          <NavBtn active={page === 'history'} onClick={() => setPage('history')}>
+            History
+          </NavBtn>
           <NavBtn active={page === 'health'} onClick={() => setPage('health')}>
             Health
           </NavBtn>
@@ -85,6 +89,7 @@ export default function App() {
       <main className="p-3 sm:p-6">
         {page === 'overview' && <OverviewPage data={priceData} />}
         {page === 'portfolio' && <PortfolioPage />}
+        {page === 'history' && <HistoryPage />}
         {page === 'health' && <HealthPage />}
       </main>
     </div>

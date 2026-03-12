@@ -16,7 +16,7 @@ from app.analytics.cost_model import estimate_net_pnl_bps, cost_breakdown
 from app.collectors import bybit_collector, lighter_collector
 from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
-from app.storage.database import get_recent_spreads, get_spreads_by_time, get_recent_alerts
+from app.storage.database import get_recent_spreads, get_spreads_by_time, get_all_spreads, get_recent_alerts
 from app.config import settings
 from app.utils.percentiles import compute_percentiles
 from app.execution import TradeRequest
@@ -55,7 +55,7 @@ async def prices():
 
 @router.get("/spreads")
 async def spreads(
-    symbol: str = "BTCUSDT",
+    symbol: str = "XAUTUSDT",
     limit: int = Query(default=500, le=5000),
     minutes: Optional[int] = Query(default=None, le=10080),
 ):
@@ -104,9 +104,23 @@ async def spreads(
     }
 
 
+@router.get("/spreads/history")
+async def spreads_history(symbol: str = "XAUTUSDT"):
+    """All historical spread data (downsampled to 50k points max)."""
+    history = await get_all_spreads(symbol)
+    mid_values = [row.get("exchange_spread_mid") for row in history]
+    stats = compute_percentiles(mid_values)
+    return {
+        "symbol": symbol,
+        "history": history,
+        "count": len(history),
+        "stats": stats.to_dict(),
+    }
+
+
 @router.get("/spreads/export")
 async def export_spreads_csv(
-    symbol: str = "BTCUSDT",
+    symbol: str = "XAUTUSDT",
     minutes: int = Query(default=60, le=1440),
 ):
     """Export spread history as CSV file."""
@@ -196,7 +210,7 @@ def _get_shared_lighter() -> LighterClient:
 
 
 @router.get("/positions")
-async def get_positions(symbol: str = "BTCUSDT"):
+async def get_positions(symbol: str = "XAUTUSDT"):
     """Get current positions on both exchanges for a symbol, with funding & theoretical PnL."""
     try:
         bybit_pos, lighter_pos, funding_data = await asyncio.wait_for(

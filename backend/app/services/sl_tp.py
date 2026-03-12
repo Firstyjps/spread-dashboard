@@ -154,7 +154,7 @@ class SlTpService:
         # Auto-stop after trigger
         self._running = False
 
-    async def start(self, symbol: str = "BTCUSDT",
+    async def start(self, symbol: str = "XAUTUSDT",
                     sl_delta: float = 0.0,
                     tp_delta: float = 0.0,
                     poll_interval_s: float = 2.0,

@@ -31,7 +31,7 @@ export const AutoHedgePanel = React.memo(function AutoHedgePanel() {
   const [error, setError] = useState('');
 
   // Config inputs
-  const [symbol, setSymbol] = useState('BTCUSDT');
+  const [symbol, setSymbol] = useState('XAUTUSDT');
   const [pollInterval, setPollInterval] = useState('2');
   const [minDelta, setMinDelta] = useState('0.001');
 

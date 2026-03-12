@@ -232,17 +232,64 @@ async def get_spreads_by_time(symbol: str, minutes: int = 5, max_rows: int = 500
             (symbol, since_ts),
         )
     else:
-        # Downsample: take every Nth row using rowid modulo
+        # Downsample: use ROW_NUMBER within the filtered symbol to avoid
+        # ID-interleaving issues when multiple symbols share the table.
         step = total // max_rows + 1
         cursor = await db.execute(
             """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
                       lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
                       short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
                       basis_bybit, basis_bybit_bps, funding_diff, received_at
-               FROM spread_metrics
-               WHERE symbol = ? AND ts > ? AND (id % ?) = 0
+               FROM (
+                   SELECT *, ROW_NUMBER() OVER (ORDER BY ts ASC) AS rn
+                   FROM spread_metrics
+                   WHERE symbol = ? AND ts > ?
+               )
+               WHERE rn % ? = 0
                ORDER BY ts ASC""",
             (symbol, since_ts, step),
+        )
+
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def get_all_spreads(symbol: str, max_rows: int = 50000):
+    """Get ALL spread data for a symbol (downsampled to max_rows)."""
+    db = await _get_db()
+    db.row_factory = aiosqlite.Row
+
+    cnt_cursor = await db.execute(
+        "SELECT COUNT(*) FROM spread_metrics WHERE symbol = ?",
+        (symbol,),
+    )
+    total = (await cnt_cursor.fetchone())[0]
+
+    if total <= max_rows:
+        cursor = await db.execute(
+            """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
+                      lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
+                      short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
+                      basis_bybit, basis_bybit_bps, funding_diff, received_at
+               FROM spread_metrics
+               WHERE symbol = ? ORDER BY ts ASC""",
+            (symbol,),
+        )
+    else:
+        step = total // max_rows + 1
+        cursor = await db.execute(
+            """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
+                      lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
+                      short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
+                      basis_bybit, basis_bybit_bps, funding_diff, received_at
+               FROM (
+                   SELECT *, ROW_NUMBER() OVER (ORDER BY ts ASC) AS rn
+                   FROM spread_metrics
+                   WHERE symbol = ?
+               )
+               WHERE rn % ? = 0
+               ORDER BY ts ASC""",
+            (symbol, step),
         )
 
     rows = await cursor.fetchall()

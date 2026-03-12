@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1/auto-hedge", tags=["auto-hedge"])
 
 
 class StartRequest(BaseModel):
-    symbol: str = "BTCUSDT"
+    symbol: str = "XAUTUSDT"
     poll_interval_s: float = 2.0
     min_delta: float = 0.001
 
