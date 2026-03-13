@@ -207,7 +207,7 @@ async def get_recent_spreads(symbol: str, limit: int = 500):
     return [dict(r) for r in reversed(rows)]
 
 
-async def get_spreads_by_time(symbol: str, minutes: int = 5, max_rows: int = 50000):
+async def get_spreads_by_time(symbol: str, minutes: int = 5, max_rows: int = 2000):
     """Get spread data for the last N minutes (downsampled to max_rows)."""
     since_ts = (time.time() - minutes * 60) * 1000
     db = await _get_db()

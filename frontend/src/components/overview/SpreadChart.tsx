@@ -29,8 +29,8 @@ const TIME_RANGES = [
 
 type TimeRange = (typeof TIME_RANGES)[number];
 
-// Max chart points — downsample if more to keep rendering fast
-const MAX_CHART_POINTS = 1500;
+// Max chart points — backend already downsamples to 2000, this is a safety net
+const MAX_CHART_POINTS = 2000;
 
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 

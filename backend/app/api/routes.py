@@ -118,6 +118,20 @@ async def spreads_history(symbol: str = "XAUTUSDT"):
     }
 
 
+@router.get("/widget/spread")
+async def widget_spread(symbol: str = "XAUTUSDT"):
+    """Simple JSON for Lock Screen widgets (Widgy, etc). Returns BPS values directly."""
+    spread = compute_spread(symbol)
+    if not spread:
+        return {"symbol": symbol, "mid_bps": None, "long_bps": None, "short_bps": None}
+    return {
+        "symbol": symbol,
+        "mid_bps": round(spread.exchange_spread_mid * 10000, 1),
+        "long_bps": round(spread.long_spread * 10000, 1),
+        "short_bps": round(spread.short_spread * 10000, 1),
+    }
+
+
 @router.get("/spreads/export")
 async def export_spreads_csv(
     symbol: str = "XAUTUSDT",
