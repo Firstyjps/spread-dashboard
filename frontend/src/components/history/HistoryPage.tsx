@@ -15,7 +15,7 @@ import {
 import { api } from '../../services/api';
 import type { SpreadRow, ChartPoint } from '../../types/api';
 
-const MAX_CHART_POINTS = 3000;
+const MAX_CHART_POINTS = 768;
 
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 
