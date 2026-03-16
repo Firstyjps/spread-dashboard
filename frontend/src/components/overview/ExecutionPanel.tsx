@@ -236,47 +236,6 @@ export const ExecutionPanel = React.memo(function ExecutionPanel({ symbol }: Pro
         )}
       </div>
 
-      {/* Theoretical vs Exchange PnL comparison */}
-      {hasPosition && theoretical && theoretical.pnl_usd != null && (
-        <div className="bg-gray-800/40 rounded-lg p-2.5 grid grid-cols-2 gap-2 text-xs font-mono">
-          <div>
-            <span className="text-gray-500">Exchange PnL</span>
-            <div className={`font-bold ${netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {formatPnl(netPnl)}
-            </div>
-          </div>
-          <div>
-            <span className="text-gray-500">Theoretical PnL</span>
-            <div className={`font-bold ${theoretical.pnl_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {formatPnl(theoretical.pnl_usd)}
-            </div>
-          </div>
-          <div>
-            <span className="text-gray-500">Spread Diff</span>
-            <div className={`${(theoretical.diff_bps || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {theoretical.diff_bps != null ? `${theoretical.diff_bps >= 0 ? '+' : ''}${theoretical.diff_bps.toFixed(2)} bps` : '–'}
-            </div>
-          </div>
-          <div>
-            <span className="text-gray-500">Funding Cost</span>
-            <div className={`${lighterFundingPaid <= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {lighterFundingPaid !== 0 ? `${lighterFundingPaid > 0 ? '-' : '+'}$${Math.abs(lighterFundingPaid).toFixed(3)}` : '–'}
-            </div>
-          </div>
-          {funding && funding.net_8h_rate != null && (
-            <div className="col-span-2 border-t border-gray-700 pt-1 mt-1">
-              <span className="text-gray-500">Funding Rate (net/8h): </span>
-              <span className={funding.net_8h_rate > 0 ? 'text-green-400' : 'text-red-400'}>
-                {funding.net_8h_rate > 0 ? '+' : ''}{(funding.net_8h_rate * 100).toFixed(4)}%
-                {' '}
-                <span className="text-gray-600">
-                  ({funding.net_8h_rate > 0 ? 'earning' : 'paying'})
-                </span>
-              </span>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Position Cards */}
       <div className="grid grid-cols-2 gap-3">
