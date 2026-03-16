@@ -157,28 +157,6 @@ export const AutoHedgePanel = React.memo(function AutoHedgePanel() {
                 <option value="XAUTUSDT">XAUTUSDT</option>
               </select>
             </div>
-            <div className="w-20">
-              <label className="text-[10px] text-gray-500 uppercase">Poll (s)</label>
-              <input
-                type="number"
-                value={pollInterval}
-                onChange={(e) => setPollInterval(e.target.value)}
-                step="0.5"
-                min="0.5"
-                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white font-mono focus:border-cyan-500 focus:outline-none"
-              />
-            </div>
-            <div className="w-24">
-              <label className="text-[10px] text-gray-500 uppercase">Min Delta</label>
-              <input
-                type="number"
-                value={minDelta}
-                onChange={(e) => setMinDelta(e.target.value)}
-                step="0.001"
-                min="0.0001"
-                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white font-mono focus:border-cyan-500 focus:outline-none"
-              />
-            </div>
           </div>
         </div>
       )}
