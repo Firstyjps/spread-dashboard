@@ -145,3 +145,17 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def reload_settings():
+    """Re-read .env into the existing settings object (in-place update).
+
+    All modules that imported ``from app.config import settings`` keep
+    a reference to the *same* object, so mutating it here propagates
+    everywhere.  Cached clients that compare against
+    ``settings.bybit_api_key`` will auto-recreate on next access.
+    """
+    fresh = Settings()
+    for field_name in Settings.model_fields:
+        object.__setattr__(settings, field_name, getattr(fresh, field_name))
+    return settings

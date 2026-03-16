@@ -79,4 +79,7 @@ export const api = {
     postJSON<any>('/sl-tp/start', config),
   slTpStop: () => postJSON<any>('/sl-tp/stop', {}),
   slTpReset: () => postJSON<any>('/sl-tp/reset', {}),
+
+  // Config reload (re-read .env without restart)
+  reloadConfig: () => postJSON<any>('/reload-config', {}),
 };

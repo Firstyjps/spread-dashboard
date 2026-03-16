@@ -21,18 +21,28 @@ log = structlog.get_logger()
 # Per-exchange timeout for the whole fetch (balances + positions)
 _EXCHANGE_TIMEOUT = 20.0
 
-# ── Singleton adapters (lazy init) ───────────────────────────────
+# ── Singleton adapters (lazy init, auto-recreate on key change) ──
 _adapters: dict[str, ExchangeAdapter] | None = None
+_adapters_bybit_key: str = ""
 
 
 def _get_adapters() -> dict[str, ExchangeAdapter]:
-    global _adapters
-    if _adapters is None:
+    global _adapters, _adapters_bybit_key
+    if _adapters is None or _adapters_bybit_key != settings.bybit_api_key:
         _adapters = {
             "bybit": BybitLinearAdapter(settings),
             "lighter": LighterAdapter(settings),
         }
+        _adapters_bybit_key = settings.bybit_api_key
+        log.info("portfolio_adapters_recreated")
     return _adapters
+
+
+def reset_adapters():
+    """Force-clear cached adapters so they recreate on next access."""
+    global _adapters, _adapters_bybit_key
+    _adapters = None
+    _adapters_bybit_key = ""
 
 
 # ── Single-exchange fetch ────────────────────────────────────────

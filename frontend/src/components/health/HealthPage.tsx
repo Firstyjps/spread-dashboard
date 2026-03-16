@@ -1,5 +1,5 @@
 // file: frontend/src/components/health/HealthPage.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 
@@ -9,6 +9,22 @@ export function HealthPage() {
     queryFn: api.health,
     refetchInterval: 5000,
   });
+
+  const [reloading, setReloading] = useState(false);
+  const [reloadMsg, setReloadMsg] = useState('');
+
+  const handleReloadConfig = async () => {
+    setReloading(true);
+    setReloadMsg('');
+    try {
+      const res = await api.reloadConfig();
+      setReloadMsg(res.key_changed ? 'Config reloaded — API key changed' : 'Config reloaded — no key change');
+    } catch (e) {
+      setReloadMsg(`Reload failed: ${e}`);
+    } finally {
+      setReloading(false);
+    }
+  };
 
   if (isLoading) {
     return <div className="text-gray-500">Checking health...</div>;
@@ -96,6 +112,30 @@ export function HealthPage() {
               {s}
             </span>
           ))}
+        </div>
+      </section>
+
+      {/* Config Reload */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-400 uppercase mb-2">Configuration</h3>
+        <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleReloadConfig}
+              disabled={reloading}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded transition-colors"
+            >
+              {reloading ? 'Reloading...' : 'Reload .env Config'}
+            </button>
+            <span className="text-sm text-gray-400">
+              Re-read .env and recreate API clients without restarting
+            </span>
+          </div>
+          {reloadMsg && (
+            <p className={`mt-2 text-sm font-mono ${reloadMsg.includes('failed') ? 'text-red-400' : 'text-emerald-400'}`}>
+              {reloadMsg}
+            </p>
+          )}
         </div>
       </section>
     </div>

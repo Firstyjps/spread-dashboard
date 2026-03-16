@@ -17,7 +17,7 @@ from app.collectors import bybit_collector, lighter_collector
 from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
 from app.storage.database import get_recent_spreads, get_spreads_by_time, get_all_spreads, get_recent_alerts
-from app.config import settings
+from app.config import settings, reload_settings
 from app.utils.percentiles import compute_percentiles
 from app.execution import TradeRequest
 from app.services.executor import ArbitrageExecutor
@@ -205,21 +205,28 @@ SIDE_MAP = {
 
 
 # --- Shared clients for read-only endpoints (reused across requests) ---
+# Automatically recreated when API keys change (e.g. account switch).
 _shared_bybit_client: Optional[BybitClient] = None
+_shared_bybit_key: str = ""
 _shared_lighter_client: Optional[LighterClient] = None
+_shared_lighter_key: str = ""
 
 
 def _get_shared_bybit() -> BybitClient:
-    global _shared_bybit_client
-    if _shared_bybit_client is None:
+    global _shared_bybit_client, _shared_bybit_key
+    if _shared_bybit_client is None or _shared_bybit_key != settings.bybit_api_key:
         _shared_bybit_client = BybitClient(settings)
+        _shared_bybit_key = settings.bybit_api_key
+        log.info("shared_bybit_client_created")
     return _shared_bybit_client
 
 
 def _get_shared_lighter() -> LighterClient:
-    global _shared_lighter_client
-    if _shared_lighter_client is None:
+    global _shared_lighter_client, _shared_lighter_key
+    if _shared_lighter_client is None or _shared_lighter_key != settings.lighter_private_key:
         _shared_lighter_client = LighterClient(settings)
+        _shared_lighter_key = settings.lighter_private_key
+        log.info("shared_lighter_client_created")
     return _shared_lighter_client
 
 
@@ -486,3 +493,43 @@ async def execute_iceberg_order(req: IcebergRequest):
     except Exception as e:
         log.error("iceberg_test_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Config hot-reload ────────────────────────────────────────────
+
+@router.post("/reload-config")
+async def reload_config():
+    """Re-read .env and recreate all cached clients.
+
+    Call this after changing API keys so every component picks up
+    the new credentials without restarting the server.
+    """
+    global _shared_bybit_client, _shared_bybit_key
+    global _shared_lighter_client, _shared_lighter_key
+
+    old_key = settings.bybit_api_key
+    reload_settings()
+    new_key = settings.bybit_api_key
+
+    # Force-clear cached clients so they recreate on next access
+    _shared_bybit_client = None
+    _shared_bybit_key = ""
+    _shared_lighter_client = None
+    _shared_lighter_key = ""
+
+    # Also reset portfolio adapters
+    from app.portfolio.service import reset_adapters
+    reset_adapters()
+
+    # Recreate clients for running background services
+    from app.services.auto_hedge import get_auto_hedge_service
+    from app.services.sl_tp import get_sl_tp_service
+    ah = get_auto_hedge_service()
+    if ah._running:
+        await ah.recreate_clients()
+    stp = get_sl_tp_service()
+    if stp._running:
+        await stp.recreate_clients()
+
+    log.info("config_reloaded", key_changed=old_key != new_key)
+    return {"status": "ok", "key_changed": old_key != new_key}

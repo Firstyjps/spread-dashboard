@@ -228,6 +228,17 @@ class SlTpService:
         self._trigger_type = None
         log.info("sl_tp_reset", symbol=self._symbol)
 
+    async def recreate_clients(self):
+        """Recreate Bybit/Lighter clients with current settings (after config reload)."""
+        if not self._running:
+            return
+        old_lighter = self._lighter
+        self._bybit = BybitClient(settings)
+        self._lighter = LighterClient(settings)
+        if old_lighter:
+            await old_lighter.close()
+        log.info("sl_tp_clients_recreated", symbol=self._symbol)
+
     def status(self) -> dict:
         return {
             "running": self._running,
