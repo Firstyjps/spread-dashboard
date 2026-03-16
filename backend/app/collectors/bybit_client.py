@@ -13,6 +13,13 @@ from app.utils.async_helpers import thread_with_timeout as _thread_with_timeout
 log = structlog.get_logger()
 
 
+def _safe_float(val, default: float = 0.0) -> float:
+    """Convert a value to float, returning *default* for None / empty string."""
+    if val is None or val == "":
+        return default
+    return float(val)
+
+
 class BybitClient:
     def __init__(self, config):
         self.session = HTTP(
@@ -46,19 +53,19 @@ class BybitClient:
                 "pnl": 0.0, "mark_price": 0.0, "liq_price": 0.0,
                 "leverage": 0.0, "cum_realized_pnl": 0.0,
             }
-            if not positions or float(positions[0].get("size", 0)) == 0:
+            if not positions or _safe_float(positions[0].get("size")) == 0:
                 return _empty
 
             pos = positions[0]
             return {
-                "amount": abs(float(pos.get("size", 0))),
+                "amount": abs(_safe_float(pos.get("size"))),
                 "is_long": pos.get("side") == "Buy",
-                "entry_price": float(pos.get("avgPrice", 0)),
-                "pnl": float(pos.get("unrealisedPnl", 0)),
-                "mark_price": float(pos.get("markPrice", 0)),
-                "liq_price": float(pos.get("liqPrice", 0) or 0),
-                "leverage": float(pos.get("leverage", 0)),
-                "cum_realized_pnl": float(pos.get("cumRealisedPnl", 0)),
+                "entry_price": _safe_float(pos.get("avgPrice")),
+                "pnl": _safe_float(pos.get("unrealisedPnl")),
+                "mark_price": _safe_float(pos.get("markPrice")),
+                "liq_price": _safe_float(pos.get("liqPrice")),
+                "leverage": _safe_float(pos.get("leverage")),
+                "cum_realized_pnl": _safe_float(pos.get("cumRealisedPnl")),
             }
         except asyncio.TimeoutError:
             log.error("bybit_get_position_timeout", symbol=symbol)
