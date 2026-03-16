@@ -57,13 +57,20 @@ class BybitClient:
                 return _empty
 
             pos = positions[0]
+            liq = _safe_float(pos.get("liqPrice"))
+
+            # Unified (cross) accounts return liqPrice="" — estimate from
+            # account equity so the dashboard still shows a useful number.
+            if liq == 0.0 and _safe_float(pos.get("size")) > 0:
+                liq = await self._estimate_liq_price(pos)
+
             return {
                 "amount": abs(_safe_float(pos.get("size"))),
                 "is_long": pos.get("side") == "Buy",
                 "entry_price": _safe_float(pos.get("avgPrice")),
                 "pnl": _safe_float(pos.get("unrealisedPnl")),
                 "mark_price": _safe_float(pos.get("markPrice")),
-                "liq_price": _safe_float(pos.get("liqPrice")),
+                "liq_price": liq,
                 "leverage": _safe_float(pos.get("leverage")),
                 "cum_realized_pnl": _safe_float(pos.get("cumRealisedPnl")),
             }
@@ -81,6 +88,34 @@ class BybitClient:
                 "pnl": 0.0, "mark_price": 0.0, "liq_price": 0.0,
                 "leverage": 0.0, "cum_realized_pnl": 0.0,
             }
+
+    async def _estimate_liq_price(self, pos: dict) -> float:
+        """Estimate liquidation price for Unified (cross-margin) accounts.
+
+        Uses account-level equity & maintenance margin:
+          LONG:  liq ≈ mark - (equity - MM) / size
+          SHORT: liq ≈ mark + (equity - MM) / size
+        Returns 0.0 on any failure so the caller just hides the field.
+        """
+        try:
+            resp = await _thread_with_timeout(
+                self.session.get_wallet_balance,
+                accountType="UNIFIED",
+            )
+            acct = (resp.get("result", {}).get("list") or [{}])[0]
+            equity = _safe_float(acct.get("totalEquity"))
+            mm = _safe_float(acct.get("totalMaintenanceMargin"))
+            mark = _safe_float(pos.get("markPrice"))
+            size = _safe_float(pos.get("size"))
+            if size == 0 or equity <= mm:
+                return 0.0
+            buffer = (equity - mm) / size
+            if pos.get("side") == "Buy":
+                return round(max(mark - buffer, 0), 3)
+            else:
+                return round(mark + buffer, 3)
+        except Exception:
+            return 0.0
 
     async def place_market_order(self, symbol: str, amount: float, side: str, reduce_only: bool = False):
         """Place a market order on Bybit linear perps."""
