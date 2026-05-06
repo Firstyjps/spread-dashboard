@@ -23,8 +23,11 @@ RUN mkdir -p /app/data
 
 EXPOSE 8000
 
-# Production: no --reload, use multiple workers for CPU-bound tasks
-# --workers 2: modest for a small VPS (CPX12 = 2 vCPU)
+# Production: no --reload. Workers stays at 1 by design:
+# this app holds in-memory state (poll loop, ws_clients, executors).
+# Running 2 workers would: (a) double exchange API calls in poll_loop,
+# (b) split WS clients across processes, (c) risk duplicate orders from
+# ArbitrageExecutor/SL_TP/AutoHedge. Scale via additional infra, not workers.
 # --timeout-keep-alive 65: slightly above Cloudflare's 60s keep-alive
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \

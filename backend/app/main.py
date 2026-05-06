@@ -11,17 +11,22 @@ import json
 import time
 import structlog
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.api.rate_limit import limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from starlette.requests import Request as _StarletteRequest
+from starlette.responses import JSONResponse as _StarletteJSONResponse
 from app.api.routes import router
 from app.portfolio.router import router as portfolio_router
 from app.api.auto_hedge_routes import router as auto_hedge_router
 from app.api.sl_tp_routes import router as sl_tp_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
-from app.storage.database import init_db, insert_tick, insert_spread, close_db, commit as db_commit
+from app.storage.database import init_db, insert_tick, insert_spread, close_db, commit as db_commit, cleanup_old_data
 from app.alerts import on_spread_update, close_telegram_session, start_telegram_bot
 
 log = structlog.get_logger()
@@ -34,6 +39,7 @@ ws_clients: dict[WebSocket, set[str] | None] = {}
 # --- Background task handles ---
 _poll_task: asyncio.Task | None = None
 _bot_task: asyncio.Task | None = None
+_cleanup_task: asyncio.Task | None = None
 
 
 _consecutive_errors = 0
@@ -152,6 +158,25 @@ async def _supervised_poll_loop():
             log.info("poll_loop_restarting")
 
 
+
+async def daily_cleanup_loop():
+    """Background task: prune rows older than settings.data_retention_days every 24h.
+
+    First run waits 60s after startup so the DB is settled, then runs once
+    per day. Never crashes the process — cleanup_old_data swallows errors.
+    """
+    await asyncio.sleep(60)
+    while True:
+        try:
+            deleted = await cleanup_old_data(days=settings.data_retention_days)
+            log.info("daily_cleanup_ran", days=settings.data_retention_days, deleted=deleted)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("daily_cleanup_error", error=str(e))
+        await asyncio.sleep(86400)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
@@ -169,8 +194,9 @@ async def lifespan(app: FastAPI):
     lighter_collector.start_market_stats_ws()
 
     # Start background polling with supervision (auto-restart on crash)
-    global _poll_task, _bot_task
+    global _poll_task, _bot_task, _cleanup_task
     _poll_task = asyncio.create_task(_supervised_poll_loop())
+    _cleanup_task = asyncio.create_task(daily_cleanup_loop())
 
     # Start Telegram bot command listener
     _bot_task = asyncio.create_task(start_telegram_bot())
@@ -179,6 +205,12 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     log.info("app_shutting_down")
+    if _cleanup_task:
+        _cleanup_task.cancel()
+        try:
+            await _cleanup_task
+        except asyncio.CancelledError:
+            pass
     if _bot_task:
         _bot_task.cancel()
         try:
@@ -217,19 +249,26 @@ app = FastAPI(
     description="Real-time price spread dashboard for Bybit & Lighter",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+
+async def _rate_limit_handler(request: _StarletteRequest, exc: RateLimitExceeded):
+    return _StarletteJSONResponse(status_code=429, content={"detail": f"Rate limit exceeded: {exc.detail}"})
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # CORS - allow frontend dev server (configurable via CORS_ORIGINS env)
 _cors_origins = [
     o.strip()
-    for o in (settings.cors_origins or "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    for o in (settings.cors_origins or "https://dash.firstyjps.com,http://localhost:5173,http://127.0.0.1:5173").split(",")
     if o.strip()
 ]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
 
 # Include REST routes
@@ -245,7 +284,13 @@ _PONG_MSG = json.dumps({"type": "pong"})
 
 # --- WebSocket endpoint ---
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
+async def websocket_endpoint(ws: WebSocket, token: str | None = Query(default=None)):
+    if not settings.api_key:
+        await ws.close(code=status.WS_1011_INTERNAL_ERROR, reason="API auth not configured")
+        return
+    if token != settings.api_key:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
+        return
     await ws.accept()
     ws_clients[ws] = None  # None = subscribed to all (backward compatible)
     log.info("ws_client_connected", total=len(ws_clients))

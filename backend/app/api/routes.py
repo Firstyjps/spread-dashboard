@@ -5,7 +5,7 @@ import asyncio
 import csv
 import io
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional
 
@@ -26,8 +26,25 @@ from app.execution.iceberg_executor import (
     execute_iceberg, IcebergConfig, PricePolicy, Urgency,
 )
 from app.execution.rate_limiter import TokenBucketRateLimiter, RateLimiterConfig
+from app.api.auth import require_api_key
+from app.api.rate_limit import limiter
 
 log = structlog.get_logger()
+
+
+# --- Tiny TTL cache for read-heavy endpoints ---
+import time as _time
+_RESPONSE_CACHE: dict[str, tuple[float, dict]] = {}
+_CACHE_TTL_S = 30.0
+
+def _cache_get(key: str):
+    item = _RESPONSE_CACHE.get(key)
+    if item and (_time.time() - item[0]) < _CACHE_TTL_S:
+        return item[1]
+    return None
+
+def _cache_set(key: str, value: dict) -> None:
+    _RESPONSE_CACHE[key] = (_time.time(), value)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -106,16 +123,21 @@ async def spreads(
 
 @router.get("/spreads/history")
 async def spreads_history(symbol: str = "XAUTUSDT"):
-    """All historical spread data (downsampled to 50k points max)."""
+    """All historical spread data (downsampled to 5k points; 30s server cache)."""
+    cached = _cache_get(f"history:{symbol}")
+    if cached is not None:
+        return cached
     history = await get_all_spreads(symbol)
     mid_values = [row.get("exchange_spread_mid") for row in history]
     stats = compute_percentiles(mid_values)
-    return {
+    payload = {
         "symbol": symbol,
         "history": history,
         "count": len(history),
         "stats": stats.to_dict(),
     }
+    _cache_set(f"history:{symbol}", payload)
+    return payload
 
 
 @router.get("/widget/spread")
@@ -321,8 +343,9 @@ def _compute_theoretical_pnl(bybit_pos: dict, lighter_pos: dict, symbol: str) ->
     }
 
 
-@router.post("/execute")
-async def execute_trade(req: TradeRequest):
+@router.post("/execute", dependencies=[Depends(require_api_key)])
+@limiter.limit("20/minute")
+async def execute_trade(request: Request, req: TradeRequest):
     mapped_side = SIDE_MAP.get(req.side, req.side)
 
     try:
@@ -356,8 +379,9 @@ class ClosePositionRequest(BaseModel):
     symbol: str
 
 
-@router.post("/execute/close_all")
-async def close_all_positions(req: ClosePositionRequest):
+@router.post("/execute/close_all", dependencies=[Depends(require_api_key)])
+@limiter.limit("20/minute")
+async def close_all_positions(request: Request, req: ClosePositionRequest):
     try:
         async with ArbitrageExecutor(settings) as executor:
             result = await executor.emergency_close_auto(symbol=req.symbol)
@@ -373,8 +397,9 @@ class MakerTestRequest(BaseModel):
     qty: float = 0.001
 
 
-@router.post("/execute/maker_test")
-async def test_maker_engine(req: MakerTestRequest):
+@router.post("/execute/maker_test", dependencies=[Depends(require_api_key)])
+@limiter.limit("10/minute")
+async def test_maker_engine(request: Request, req: MakerTestRequest):
     """Test maker engine on Bybit only (no Lighter). For dev/testing."""
     if req.side not in ("Buy", "Sell"):
         raise HTTPException(status_code=400, detail="side must be 'Buy' or 'Sell'")
@@ -442,8 +467,9 @@ def _get_rate_limiter() -> TokenBucketRateLimiter:
     return _shared_rate_limiter
 
 
-@router.post("/execute/iceberg")
-async def execute_iceberg_order(req: IcebergRequest):
+@router.post("/execute/iceberg", dependencies=[Depends(require_api_key)])
+@limiter.limit("10/minute")
+async def execute_iceberg_order(request: Request, req: IcebergRequest):
     """Synthetic Iceberg Executor on Bybit. For dev/testing."""
     if req.side not in ("Buy", "Sell"):
         raise HTTPException(status_code=400, detail="side must be 'Buy' or 'Sell'")
@@ -497,8 +523,9 @@ async def execute_iceberg_order(req: IcebergRequest):
 
 # ── Config hot-reload ────────────────────────────────────────────
 
-@router.post("/reload-config")
-async def reload_config():
+@router.post("/reload-config", dependencies=[Depends(require_api_key)])
+@limiter.limit("5/minute")
+async def reload_config(request: Request):
     """Re-read .env and recreate all cached clients.
 
     Call this after changing API keys so every component picks up

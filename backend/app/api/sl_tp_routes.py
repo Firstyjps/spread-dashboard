@@ -5,10 +5,11 @@ POST /api/v1/sl-tp/start   — start monitoring
 POST /api/v1/sl-tp/stop    — stop monitoring
 GET  /api/v1/sl-tp/status  — get current status
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.services.sl_tp import get_sl_tp_service
+from app.api.auth import require_api_key
 
 router = APIRouter(prefix="/api/v1/sl-tp", tags=["sl-tp"])
 
@@ -20,7 +21,7 @@ class StartRequest(BaseModel):
     poll_interval_s: float = 2.0
 
 
-@router.post("/start")
+@router.post("/start", dependencies=[Depends(require_api_key)])
 async def start_sl_tp(req: StartRequest):
     svc = get_sl_tp_service()
     try:
@@ -35,7 +36,7 @@ async def start_sl_tp(req: StartRequest):
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.post("/stop")
+@router.post("/stop", dependencies=[Depends(require_api_key)])
 async def stop_sl_tp():
     svc = get_sl_tp_service()
     try:
@@ -45,7 +46,7 @@ async def stop_sl_tp():
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.post("/reset")
+@router.post("/reset", dependencies=[Depends(require_api_key)])
 async def reset_sl_tp():
     svc = get_sl_tp_service()
     svc.reset()

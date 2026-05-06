@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     alert_upper_bps: float = 60.0
     alert_lower_bps: float = 30.0
 
+    # Data retention — daily cleanup runs, deletes rows older than this
+    data_retention_days: int = 30
+
+    # API auth (header X-API-Key) — required for write endpoints
+    api_key: str = ""
+
     # CORS (comma-separated origins, default: localhost dev servers)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 

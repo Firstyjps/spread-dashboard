@@ -18,6 +18,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
+    # Run as deploy user (uid 1000) so DB files are deploy-owned, not root
+    user: "1000:1000"
     # No host port mapping — only reachable via internal network
     expose:
       - "8000"

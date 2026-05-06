@@ -26,3 +26,4 @@ git+https://github.com/elliottech/lighter-python.git
 # prometheus-client==0.21.1
 # sqlalchemy[asyncio]==2.0.36
 # alembic==1.14.0
+slowapi==0.1.9

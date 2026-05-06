@@ -1,12 +1,17 @@
 // file: frontend/src/App.tsx
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from './services/api';
+import { api, getApiKey } from './services/api';
 import { useWebSocket } from './hooks/useWebSocket';
 import { OverviewPage } from './components/overview/OverviewPage';
-import { HealthPage } from './components/health/HealthPage';
-import { PortfolioPage } from './components/portfolio/PortfolioPage';
-import { HistoryPage } from './components/history/HistoryPage';
+
+const HealthPage = lazy(() => import('./components/health/HealthPage').then(m => ({ default: m.HealthPage })));
+const PortfolioPage = lazy(() => import('./components/portfolio/PortfolioPage').then(m => ({ default: m.PortfolioPage })));
+const HistoryPage = lazy(() => import('./components/history/HistoryPage').then(m => ({ default: m.HistoryPage })));
+
+const PageFallback = () => (
+  <div className="flex items-center justify-center py-20 text-gray-500 text-sm">Loading…</div>
+);
 
 type Page = 'overview' | 'portfolio' | 'history' | 'health';
 
@@ -41,7 +46,7 @@ export default function App() {
   }, []);
 
   const { isConnected, subscribe, unsubscribe } = useWebSocket({
-    url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`,
+    url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws${getApiKey() ? `?token=${encodeURIComponent(getApiKey())}` : ''}`,
     onMessage: handleWsMessage,
   });
 
@@ -88,9 +93,9 @@ export default function App() {
       {/* Content */}
       <main className="p-3 sm:p-6">
         {page === 'overview' && <OverviewPage data={priceData} />}
-        {page === 'portfolio' && <PortfolioPage />}
-        {page === 'history' && <HistoryPage />}
-        {page === 'health' && <HealthPage />}
+        {page === 'portfolio' && <Suspense fallback={<PageFallback />}><PortfolioPage /></Suspense>}
+        {page === 'history' && <Suspense fallback={<PageFallback />}><HistoryPage /></Suspense>}
+        {page === 'health' && <Suspense fallback={<PageFallback />}><HealthPage /></Suspense>}
       </main>
     </div>
   );

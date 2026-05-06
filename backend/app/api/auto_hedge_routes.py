@@ -5,11 +5,12 @@ POST /api/v1/auto-hedge/start   — start the monitor
 POST /api/v1/auto-hedge/stop    — stop the monitor
 GET  /api/v1/auto-hedge/status  — get current status
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 
 from app.services.auto_hedge import get_auto_hedge_service
+from app.api.auth import require_api_key
 
 router = APIRouter(prefix="/api/v1/auto-hedge", tags=["auto-hedge"])
 
@@ -20,7 +21,7 @@ class StartRequest(BaseModel):
     min_delta: float = 0.001
 
 
-@router.post("/start")
+@router.post("/start", dependencies=[Depends(require_api_key)])
 async def start_auto_hedge(req: StartRequest):
     svc = get_auto_hedge_service()
     try:
@@ -34,7 +35,7 @@ async def start_auto_hedge(req: StartRequest):
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.post("/stop")
+@router.post("/stop", dependencies=[Depends(require_api_key)])
 async def stop_auto_hedge():
     svc = get_auto_hedge_service()
     try:

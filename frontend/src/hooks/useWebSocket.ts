@@ -24,9 +24,9 @@ function jitter(baseMs: number): number {
 export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOptions) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
-  const heartbeatTimer = useRef<ReturnType<typeof setInterval>>();
-  const pongTimer = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const heartbeatTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const pongTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const retryCount = useRef(0);
   const backoffMs = useRef(INITIAL_BACKOFF_MS);
 

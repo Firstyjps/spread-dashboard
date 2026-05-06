@@ -1,7 +1,8 @@
 // file: frontend/src/services/api.ts
 const BASE = '/api/v1';
 const FETCH_TIMEOUT_MS = 15000;
-const EXECUTE_TIMEOUT_MS = 60000; // Execution can take 15s+ (maker engine) + Lighter
+const EXECUTE_TIMEOUT_MS = 60000;
+const KEY_STORAGE = 'spread_api_key';
 
 function withTimeout(ms: number): AbortSignal {
   const controller = new AbortController();
@@ -9,8 +10,36 @@ function withTimeout(ms: number): AbortSignal {
   return controller.signal;
 }
 
-async function fetchJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { signal: withTimeout(FETCH_TIMEOUT_MS) });
+export function getApiKey(): string {
+  return (typeof window !== 'undefined' && localStorage.getItem(KEY_STORAGE)) || '';
+}
+
+export function setApiKey(key: string): void {
+  if (typeof window === 'undefined') return;
+  if (key) localStorage.setItem(KEY_STORAGE, key);
+  else localStorage.removeItem(KEY_STORAGE);
+}
+
+function promptForKey(): string {
+  if (typeof window === 'undefined') return '';
+  const k = window.prompt('Enter API key (X-API-Key) — saved in localStorage') || '';
+  if (k) setApiKey(k);
+  return k;
+}
+
+function authHeaders(): Record<string, string> {
+  const k = getApiKey();
+  return k ? { 'X-API-Key': k } : {};
+}
+
+async function fetchJSON<T>(path: string, withAuth = false): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    signal: withTimeout(FETCH_TIMEOUT_MS),
+    headers: withAuth ? authHeaders() : {},
+  });
+  if (res.status === 401 && withAuth) {
+    if (promptForKey()) return fetchJSON<T>(path, true);
+  }
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -20,7 +49,7 @@ async function postJSON<T>(path: string, body: unknown, timeoutMs = FETCH_TIMEOU
   try {
     res = await fetch(`${BASE}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(body),
       signal: withTimeout(timeoutMs),
     });
@@ -29,6 +58,10 @@ async function postJSON<T>(path: string, body: unknown, timeoutMs = FETCH_TIMEOU
       throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s — backend may still be processing`);
     }
     throw err;
+  }
+  if (res.status === 401) {
+    if (promptForKey()) return postJSON<T>(path, body, timeoutMs);
+    throw new Error('Unauthorized: missing or invalid X-API-Key');
   }
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
@@ -54,7 +87,6 @@ export const api = {
   alerts: (limit = 50) => fetchJSON<any>(`/alerts?limit=${limit}`),
   config: () => fetchJSON<any>('/config'),
 
-  // CSV export URL (for direct download)
   exportCsvUrl: (symbol: string, minutes = 60) =>
     `${BASE}/spreads/export?symbol=${symbol}&minutes=${minutes}`,
 
@@ -67,19 +99,16 @@ export const api = {
   closePositions: (symbol: string) =>
     postJSON<any>('/execute/close_all', { symbol }, EXECUTE_TIMEOUT_MS),
 
-  // Auto-Hedge
   autoHedgeStatus: () => fetchJSON<any>('/auto-hedge/status'),
   autoHedgeStart: (config: { symbol: string; poll_interval_s: number; min_delta: number }) =>
     postJSON<any>('/auto-hedge/start', config),
   autoHedgeStop: () => postJSON<any>('/auto-hedge/stop', {}),
 
-  // SL/TP
   slTpStatus: () => fetchJSON<any>('/sl-tp/status'),
   slTpStart: (config: { symbol: string; sl_delta: number; tp_delta: number; poll_interval_s?: number }) =>
     postJSON<any>('/sl-tp/start', config),
   slTpStop: () => postJSON<any>('/sl-tp/stop', {}),
   slTpReset: () => postJSON<any>('/sl-tp/reset', {}),
 
-  // Config reload (re-read .env without restart)
   reloadConfig: () => postJSON<any>('/reload-config', {}),
 };

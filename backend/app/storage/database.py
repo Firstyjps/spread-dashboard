@@ -254,44 +254,38 @@ async def get_spreads_by_time(symbol: str, minutes: int = 5, max_rows: int = 200
     return [dict(r) for r in rows]
 
 
-async def get_all_spreads(symbol: str, max_rows: int = 50000):
-    """Get ALL spread data for a symbol (downsampled to max_rows)."""
+async def get_all_spreads(symbol: str, max_rows: int = 5000):
+    """Get ALL spread data for a symbol (downsampled to max_rows, slim cols).
+
+    Strategy: index-only scan to grab all ids for the symbol, stride-sample
+    in Python, then fetch the sampled rows by id IN (...). Avoids the
+    expensive ROW_NUMBER() window over the full table.
+    """
     db = await _get_db()
     db.row_factory = aiosqlite.Row
 
-    cnt_cursor = await db.execute(
-        "SELECT COUNT(*) FROM spread_metrics WHERE symbol = ?",
+    id_cursor = await db.execute(
+        "SELECT id FROM spread_metrics WHERE symbol = ? ORDER BY ts ASC",
         (symbol,),
     )
-    total = (await cnt_cursor.fetchone())[0]
+    ids = [r[0] for r in await id_cursor.fetchall()]
+    if not ids:
+        return []
 
-    if total <= max_rows:
-        cursor = await db.execute(
-            """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
-                      lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
-                      short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
-                      basis_bybit, basis_bybit_bps, funding_diff, received_at
-               FROM spread_metrics
-               WHERE symbol = ? ORDER BY ts ASC""",
-            (symbol,),
-        )
+    if len(ids) <= max_rows:
+        sample_ids = ids
     else:
-        step = total // max_rows + 1
-        cursor = await db.execute(
-            """SELECT id, ts, symbol, bybit_mid, lighter_mid, bybit_bid, bybit_ask,
-                      lighter_bid, lighter_ask, exchange_spread_mid, long_spread,
-                      short_spread, bid_ask_spread_bybit, bid_ask_spread_lighter,
-                      basis_bybit, basis_bybit_bps, funding_diff, received_at
-               FROM (
-                   SELECT *, ROW_NUMBER() OVER (ORDER BY ts ASC) AS rn
-                   FROM spread_metrics
-                   WHERE symbol = ?
-               )
-               WHERE rn % ? = 0
-               ORDER BY ts ASC""",
-            (symbol, step),
-        )
+        step = max(1, len(ids) // max_rows)
+        sample_ids = ids[::step][:max_rows]
 
+    placeholders = ",".join(["?"] * len(sample_ids))
+    cursor = await db.execute(
+        f"""SELECT ts, exchange_spread_mid, long_spread, short_spread
+            FROM spread_metrics
+            WHERE id IN ({placeholders})
+            ORDER BY ts ASC""",
+        sample_ids,
+    )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
 
@@ -318,7 +312,9 @@ async def cleanup_old_data(days: int = 7) -> int:
         cutoff_ts = (time.time() - days * 86400) * 1000  # ms
         total_deleted = 0
         db = await _get_db()
-        for table in ["ticks", "spread_metrics", "funding_snapshots", "alerts"]:
+        # NOTE: funding_snapshots is currently never written to (no producer wired);
+        # /api/v1/funding fetches live each call. Skipping it avoids a wasteful daily DELETE.
+        for table in ["ticks", "spread_metrics", "alerts"]:
             try:
                 cursor = await db.execute(
                     f"DELETE FROM {table} WHERE ts < ?", (cutoff_ts,)
