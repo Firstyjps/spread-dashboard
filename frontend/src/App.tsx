@@ -71,18 +71,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-brand-base text-text-primary flex flex-col font-sans select-none">
       {/* Sticky Topbar */}
-      <nav className="sticky top-0 z-40 bg-brand-base/80 backdrop-blur-md border-b border-border-subtle h-12 flex items-center px-4 justify-between">
-        <div className="flex items-center gap-6">
+      <nav className="sticky top-0 z-40 bg-brand-base/80 backdrop-blur-md border-b border-border-subtle h-11 sm:h-12 flex items-center px-3 sm:px-4 justify-between overflow-hidden">
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2 sm:flex-none sm:justify-start sm:gap-6">
           {/* Logo */}
-          <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setPage('overview')}>
-            <div className="w-2.5 h-2.5 rounded-sm bg-gradient-to-tr from-accent-amber to-accent-indigo shadow-[0_0_10px_rgba(245,166,35,0.4)]" />
-            <span className="font-mono font-bold text-xs tracking-wider text-text-primary">
+          <div className="flex shrink-0 items-center gap-1.5 cursor-pointer" onClick={() => setPage('overview')}>
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm bg-gradient-to-tr from-accent-amber to-accent-indigo shadow-[0_0_10px_rgba(245,166,35,0.4)]" />
+            <span className="font-mono font-bold text-[11px] sm:text-xs tracking-wider text-text-primary">
               spread<span className="text-accent-amber">.</span>dash
             </span>
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex h-12 items-center">
+          <div className="flex h-11 min-w-0 items-center justify-end sm:h-12">
             <NavBtn active={page === 'overview'} onClick={() => setPage('overview')}>
               Overview
             </NavBtn>
@@ -95,14 +95,16 @@ export default function App() {
             <NavBtn active={page === 'history'} onClick={() => setPage('history')}>
               History
             </NavBtn>
-            <NavBtn active={page === 'health'} onClick={() => setPage('health')}>
-              Health
-            </NavBtn>
+            <div className="hidden sm:block">
+              <NavBtn active={page === 'health'} onClick={() => setPage('health')}>
+                Health
+              </NavBtn>
+            </div>
           </div>
         </div>
 
         {/* Live status dot */}
-        <div className="flex items-center gap-2 text-xs font-mono bg-brand-panel/40 border border-border-subtle px-2 py-0.5 rounded-md">
+        <div className="hidden sm:flex items-center gap-2 text-xs font-mono bg-brand-panel/40 border border-border-subtle px-2 py-0.5 rounded-md">
           <span className="relative flex h-1.5 w-1.5">
             {isConnected && (
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75"></span>
@@ -181,7 +183,7 @@ function NavBtn({
   return (
     <button
       onClick={onClick}
-      className={`px-3 h-12 text-xs font-medium border-b-2 transition-colors duration-150 ${
+      className={`px-2 h-11 text-[11px] font-medium border-b-2 transition-colors duration-150 whitespace-nowrap sm:h-12 sm:px-3 sm:text-xs ${
         active
           ? 'border-accent-amber text-text-primary'
           : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-strong'
