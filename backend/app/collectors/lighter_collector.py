@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 
 from app.models import NormalizedTick, FundingSnapshot
 from app.config import settings
+from app.metrics import EXCHANGE_LATENCY
 
 log = structlog.get_logger()
 
@@ -69,6 +70,7 @@ async def health_check() -> Dict[str, Any]:
         session = await _get_session()
         async with session.get(url) as resp:
             latency_ms = (time.time() - t0) * 1000
+            EXCHANGE_LATENCY.labels(exchange="lighter").observe(latency_ms / 1000)
             if resp.status == 200:
                 text = await resp.text()
                 return {
@@ -280,6 +282,7 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
 
     url = f"{BASE_URL}/api/v1/orderBookOrders"
     params = {"market_id": market_id, "limit": 5}
+    t0 = time.time()
 
     try:
         sem = _get_semaphore()
@@ -287,12 +290,22 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
             session = await _get_session()
             async with session.get(url, params=params) as resp:
                 if resp.status == 429:
+                    send_alert = False
                     async with _get_rate_lock():
                         _429_count += 1
                         backoff_s = min(2 ** _429_count, 30)
                         _rate_limited_until = time.time() + backoff_s
+                        send_alert = _429_count >= 5
                     if _429_count <= 3:
                         log.warning("lighter_rate_limited", backoff_s=backoff_s, count=_429_count)
+                    if send_alert:
+                        from app.alerts.alert_engine import send_system_alert
+                        await send_system_alert(
+                            "lighter_rate_limited",
+                            f"Lighter returned HTTP 429 {_429_count} times; backing off {backoff_s}s",
+                            severity="warning",
+                            value=float(_429_count),
+                        )
                     return None
 
                 if resp.status != 200:
@@ -356,6 +369,8 @@ async def fetch_ticker(symbol: str) -> Optional[NormalizedTick]:
     except Exception as e:
         log.error("lighter_ticker_exception", symbol=symbol, error=str(e))
         return None
+    finally:
+        EXCHANGE_LATENCY.labels(exchange="lighter").observe(time.time() - t0)
 
 
 # ---------- Funding rate cache ----------

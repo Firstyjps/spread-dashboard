@@ -243,8 +243,11 @@ ssh -i ~/.ssh/hetzner_ed25519 -L 8081:127.0.0.1:81 deploy@5.223.65.230
 
 ### Database backup
 ```bash
-cp ~/spread-dashboard/backend/data/spread_dashboard.db \
-   ~/spread-dashboard/backend/data/spread_dashboard.db.bak.$(date +%Y%m%d)
+# One-off backup
+~/spread-dashboard/scripts/backup_db.sh
+
+# Daily 03:00 server-time backup via cron
+(crontab -l 2>/dev/null; echo "0 3 * * * /home/deploy/spread-dashboard/scripts/backup_db.sh") | crontab -
 ```
 
 ---

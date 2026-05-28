@@ -137,6 +137,8 @@ class SymbolAlertState:
 
 # Per-symbol state (module-level singleton)
 _states: Dict[str, SymbolAlertState] = {}
+_system_last_sent: Dict[str, float] = {}
+_SYSTEM_COOLDOWN_S = 300.0
 
 
 def _get_state(symbol: str) -> SymbolAlertState:
@@ -291,6 +293,47 @@ async def _send_and_store(
         log.error("alert_db_insert_error", error=str(e))
 
 
+async def send_system_alert(
+    alert_type: str,
+    message: str,
+    severity: str = "warning",
+    value: Optional[float] = None,
+    threshold: Optional[float] = None,
+) -> bool:
+    """Send a rate-limited system alert and persist it to the alerts table."""
+    now = time.monotonic()
+    last_sent = _system_last_sent.get(alert_type, 0.0)
+    if now - last_sent < _SYSTEM_COOLDOWN_S:
+        return False
+
+    _system_last_sent[alert_type] = now
+    full_message = f"\u26a0\ufe0f SYSTEM: {message}"
+
+    try:
+        alert = Alert(
+            ts=time.time() * 1000,
+            alert_type=alert_type,
+            symbol=None,
+            severity=severity,
+            message=full_message,
+            value=value,
+            threshold=threshold,
+        )
+        await insert_alert(alert)
+        await db_commit()
+    except Exception as e:
+        log.error("system_alert_db_insert_error", alert_type=alert_type, error=str(e))
+
+    if settings.telegram_enabled and settings.telegram_bot_token:
+        try:
+            await send_telegram(full_message)
+        except Exception as e:
+            log.error("system_alert_telegram_error", alert_type=alert_type, error=str(e))
+
+    return True
+
+
 def reset_states() -> None:
     """Reset all per-symbol state. Useful for testing."""
     _states.clear()
+    _system_last_sent.clear()

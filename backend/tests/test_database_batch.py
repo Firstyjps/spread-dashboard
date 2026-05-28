@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 import aiosqlite
 from app.storage import database
-from app.models import NormalizedTick, SpreadMetric, Alert
+from app.models import NormalizedTick, SpreadMetric, Alert, TradeRecord
 
 
 @pytest_asyncio.fixture
@@ -68,6 +68,20 @@ def _make_alert(symbol="BTCUSDT") -> Alert:
     )
 
 
+def _make_trade(symbol="BTCUSDT") -> TradeRecord:
+    return TradeRecord(
+        ts=time.time() * 1000,
+        symbol=symbol,
+        strategy="arb_sequential",
+        side="BUY_LIGHTER_SELL_BYBIT",
+        qty_requested=1.0,
+        qty_filled=1.0,
+        bybit_side="Sell",
+        status="success",
+        detail="test trade",
+    )
+
+
 @pytest.mark.asyncio
 class TestBatchCommit:
     async def test_insert_tick_does_not_auto_commit(self, fresh_db):
@@ -100,6 +114,16 @@ class TestBatchCommit:
             cursor = await db2.execute("SELECT COUNT(*) FROM alerts")
             (count,) = await cursor.fetchone()
             assert count == 0, "insert_alert should not auto-commit"
+
+    async def test_insert_trade_does_not_auto_commit(self, fresh_db):
+        """insert_trade should NOT commit."""
+        trade = _make_trade()
+        await database.insert_trade(trade)
+
+        async with aiosqlite.connect(database.DB_PATH) as db2:
+            cursor = await db2.execute("SELECT COUNT(*) FROM trades")
+            (count,) = await cursor.fetchone()
+            assert count == 0, "insert_trade should not auto-commit"
 
     async def test_commit_makes_data_visible(self, fresh_db):
         """After explicit commit(), data should be visible to other connections."""

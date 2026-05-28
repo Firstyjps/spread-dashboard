@@ -40,6 +40,27 @@ export interface Alert {
   acknowledged: number;
 }
 
+/** Persisted execution journal row. */
+export interface TradeRecord {
+  id: number;
+  ts: number;
+  symbol: string;
+  strategy: string;
+  side: string;
+  qty_requested: number;
+  qty_filled: number;
+  bybit_side: string;
+  bybit_fill_price: number | null;
+  bybit_fee: number | null;
+  lighter_fill_price: number | null;
+  lighter_fee: number | null;
+  spread_bps_at_entry: number | null;
+  net_pnl_usd: number | null;
+  duration_ms: number | null;
+  status: string;
+  detail: string | null;
+}
+
 /** Tick data for a single exchange feed. */
 export interface TickData {
   mid: number;

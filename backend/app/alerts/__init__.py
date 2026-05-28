@@ -5,6 +5,7 @@ from .alert_engine import (  # noqa: F401
     decide_side,
     build_alert_message,
     build_recovery_message,
+    send_system_alert,
 )
 from .telegram_notifier import send_telegram, close_session as close_telegram_session  # noqa: F401
 from .telegram_bot import start_polling as start_telegram_bot  # noqa: F401
@@ -15,6 +16,7 @@ __all__ = [
     "decide_side",
     "build_alert_message",
     "build_recovery_message",
+    "send_system_alert",
     "send_telegram",
     "close_telegram_session",
     "start_telegram_bot",

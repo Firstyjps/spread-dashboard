@@ -8,14 +8,31 @@ Safety: if Lighter fails after Bybit fills, Bybit is reversed immediately.
 Cleanup: client resources are properly closed after each execution.
 """
 import asyncio
+import time
 import structlog
 from decimal import Decimal
+from typing import Optional
 from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
 from app.collectors.lighter_collector import MARKET_META
 from app.execution.maker_engine import smart_execute_maker, MakerConfig
+from app.alerts.alert_engine import send_system_alert
+from app.analytics.spread_engine import compute_spread
+from app.metrics import EXECUTION_DURATION
+from app.models import TradeRecord
+from app.services.circuit_breaker import circuit_breaker
+from app.services.trade_journal import record_trade
 
 log = structlog.get_logger()
+
+
+def _to_float(value, default: Optional[float] = None) -> Optional[float]:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except Exception:
+        return default
 
 
 def _build_maker_config(config, force_maker_only: bool = False) -> MakerConfig:
@@ -68,6 +85,9 @@ class ArbitrageExecutor:
         3. Lighter MARKET with exact Bybit filled qty
         4. If Lighter fails → reverse Bybit for safety
         """
+        start_ms = time.time() * 1000
+        spread_bps_at_entry = self._current_spread_bps(symbol)
+        failure_counted = False
         log.info("arb_sequential_start", side=strategy_side, symbol=symbol,
                  amount=amount, maker_only=self.maker_only)
 
@@ -95,6 +115,18 @@ class ArbitrageExecutor:
             # ── Phase 2: Evaluate Bybit result ──
             if bybit_res.status == "aborted":
                 log.warning("arb_seq_bybit_aborted", detail=bybit_res.detail)
+                await self._record_arb_trade(
+                    symbol=symbol,
+                    strategy_side=strategy_side,
+                    bybit_side=bybit_side,
+                    qty_requested=amount,
+                    qty_filled=0.0,
+                    bybit_res=bybit_res,
+                    spread_bps_at_entry=spread_bps_at_entry,
+                    start_ms=start_ms,
+                    status="aborted",
+                    detail=bybit_res.detail,
+                )
                 return [None, bybit_res]
 
             filled_qty = float(bybit_res.filled_qty)
@@ -107,6 +139,26 @@ class ArbitrageExecutor:
                             threshold_pct=self.min_fill_pct)
                 if filled_qty > 0:
                     await self._reverse_bybit(symbol, bybit_side, filled_qty)
+                    status = "reversed"
+                else:
+                    status = "aborted"
+                await self._record_arb_trade(
+                    symbol=symbol,
+                    strategy_side=strategy_side,
+                    bybit_side=bybit_side,
+                    qty_requested=amount,
+                    qty_filled=filled_qty,
+                    bybit_res=bybit_res,
+                    spread_bps_at_entry=spread_bps_at_entry,
+                    start_ms=start_ms,
+                    status=status,
+                    detail=f"fill {fill_pct:.1f}% below threshold {self.min_fill_pct:.1f}%",
+                )
+                if filled_qty > 0:
+                    failure_counted = True
+                    await self._record_execution_failure(
+                        f"Bybit fill below threshold for {symbol}; reversed {filled_qty:.6f}"
+                    )
                 return [None, bybit_res]
 
             # Check Lighter minimum order size
@@ -117,6 +169,22 @@ class ArbitrageExecutor:
                 log.warning("arb_seq_below_lighter_min",
                             filled_qty=filled_qty, lighter_min=lighter_min)
                 await self._reverse_bybit(symbol, bybit_side, filled_qty)
+                await self._record_arb_trade(
+                    symbol=symbol,
+                    strategy_side=strategy_side,
+                    bybit_side=bybit_side,
+                    qty_requested=amount,
+                    qty_filled=filled_qty,
+                    bybit_res=bybit_res,
+                    spread_bps_at_entry=spread_bps_at_entry,
+                    start_ms=start_ms,
+                    status="reversed",
+                    detail=f"filled qty {filled_qty:.6f} below Lighter minimum {lighter_min:.6f}",
+                )
+                failure_counted = True
+                await self._record_execution_failure(
+                    f"Bybit fill below Lighter minimum for {symbol}; reversed {filled_qty:.6f}"
+                )
                 return [None, bybit_res]
 
             # ── Phase 3: Lighter MARKET with exact Bybit filled qty ──
@@ -132,6 +200,27 @@ class ArbitrageExecutor:
                 log.error("arb_seq_lighter_failed", error=str(lighter_err),
                           bybit_filled=filled_qty)
                 await self._reverse_bybit(symbol, bybit_side, filled_qty)
+                await self._record_arb_trade(
+                    symbol=symbol,
+                    strategy_side=strategy_side,
+                    bybit_side=bybit_side,
+                    qty_requested=amount,
+                    qty_filled=filled_qty,
+                    bybit_res=bybit_res,
+                    spread_bps_at_entry=spread_bps_at_entry,
+                    start_ms=start_ms,
+                    status="reversed",
+                    detail=f"Lighter failed: {lighter_err}",
+                )
+                failure_counted = True
+                await self._record_execution_failure(
+                    f"Lighter failed for {symbol}; Bybit {filled_qty:.6f} {bybit_side} reversed"
+                )
+                await send_system_alert(
+                    "execution_reversal",
+                    f"Lighter failed for {symbol}; Bybit {filled_qty:.6f} {bybit_side} reversed",
+                    severity="critical",
+                )
                 raise Exception(
                     f"Lighter failed: {lighter_err}. "
                     f"Bybit position ({filled_qty} {bybit_side}) reversed for safety."
@@ -144,9 +233,29 @@ class ArbitrageExecutor:
                      lighter=str(lighter_res), bybit_status=bybit_res.status,
                      matched_qty=filled_qty)
 
+            circuit_breaker.record_execution_success()
+            await self._record_arb_trade(
+                symbol=symbol,
+                strategy_side=strategy_side,
+                bybit_side=bybit_side,
+                qty_requested=amount,
+                qty_filled=filled_qty,
+                bybit_res=bybit_res,
+                spread_bps_at_entry=spread_bps_at_entry,
+                start_ms=start_ms,
+                status="partial" if bybit_res.status == "partial" else "success",
+                detail=f"Lighter matched Bybit fill; tx={lighter_res.get('tx_hash', 'unknown') if isinstance(lighter_res, dict) else 'unknown'}",
+            )
             return [lighter_res, bybit_res]
 
+        except Exception:
+            if not failure_counted:
+                await self._record_execution_failure(f"Arbitrage execution failed for {symbol}")
+            raise
         finally:
+            EXECUTION_DURATION.labels(strategy="arb_sequential").observe(
+                max(0.0, (time.time() * 1000 - start_ms) / 1000)
+            )
             await self._cleanup()
 
     # ─── Helpers ──────────────────────────────────────────────────
@@ -182,12 +291,54 @@ class ArbitrageExecutor:
                  time_ms=round(bybit_res.time_to_fill_ms, 1),
                  status=bybit_res.status)
 
+    def _current_spread_bps(self, symbol: str) -> Optional[float]:
+        spread = compute_spread(symbol)
+        if not spread:
+            return None
+        return spread.exchange_spread_mid * 10_000
+
+    async def _record_execution_failure(self, message: str):
+        if circuit_breaker.record_execution_failure():
+            await send_system_alert("circuit_breaker_tripped", message, severity="critical")
+
+    async def _record_arb_trade(
+        self,
+        symbol: str,
+        strategy_side: str,
+        bybit_side: str,
+        qty_requested: float,
+        qty_filled: float,
+        bybit_res,
+        spread_bps_at_entry: Optional[float],
+        start_ms: float,
+        status: str,
+        detail: Optional[str] = None,
+    ):
+        trade = TradeRecord(
+            ts=time.time() * 1000,
+            symbol=symbol,
+            strategy="arb_sequential",
+            side=strategy_side,
+            qty_requested=qty_requested,
+            qty_filled=qty_filled,
+            bybit_side=bybit_side,
+            bybit_fill_price=_to_float(getattr(bybit_res, "avg_price", None)),
+            bybit_fee=_to_float(getattr(bybit_res, "estimated_fee", None)),
+            spread_bps_at_entry=spread_bps_at_entry,
+            duration_ms=time.time() * 1000 - start_ms,
+            status=status,
+            detail=detail,
+        )
+        await record_trade(trade)
+
     # ─── Emergency close (unchanged) ─────────────────────────────
 
     async def emergency_close_both_sides(
         self, symbol: str, lighter_amount: float, bybit_amount: float, lighter_is_long: bool
     ):
         """Close positions on both exchanges."""
+        start_ms = time.time() * 1000
+        bybit_side = "Sell" if not lighter_is_long else "Buy"
         log.info(
             "emergency_close_triggered",
             symbol=symbol,
@@ -216,21 +367,51 @@ class ArbitrageExecutor:
                         side=bybit_side,
                         reduce_only=True,
                     )
-                )
+            )
 
             if not tasks:
+                await self._record_emergency_close(
+                    symbol=symbol,
+                    lighter_amount=lighter_amount,
+                    bybit_amount=bybit_amount,
+                    bybit_side=bybit_side,
+                    start_ms=start_ms,
+                    status="success",
+                    detail="No positions to close.",
+                )
+                circuit_breaker.record_execution_success()
                 return {"status": "success", "detail": "No positions to close."}
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             errors = [str(r) for r in results if isinstance(r, Exception)]
             if errors:
+                await self._record_emergency_close(
+                    symbol=symbol,
+                    lighter_amount=lighter_amount,
+                    bybit_amount=bybit_amount,
+                    bybit_side=bybit_side,
+                    start_ms=start_ms,
+                    status="partial",
+                    detail=f"Some closes failed: {'; '.join(errors)}",
+                )
+                await self._record_execution_failure(f"Emergency close partial for {symbol}")
                 return {
                     "status": "partial",
                     "detail": f"Some closes failed: {'; '.join(errors)}",
                     "results": [str(r) for r in results],
                 }
 
+            await self._record_emergency_close(
+                symbol=symbol,
+                lighter_amount=lighter_amount,
+                bybit_amount=bybit_amount,
+                bybit_side=bybit_side,
+                start_ms=start_ms,
+                status="success",
+                detail="All positions closed.",
+            )
+            circuit_breaker.record_execution_success()
             return {
                 "status": "success",
                 "detail": "All positions closed.",
@@ -239,9 +420,22 @@ class ArbitrageExecutor:
 
         except Exception as e:
             log.error("emergency_close_failed", error=str(e))
+            await self._record_emergency_close(
+                symbol=symbol,
+                lighter_amount=lighter_amount,
+                bybit_amount=bybit_amount,
+                bybit_side=bybit_side,
+                start_ms=start_ms,
+                status="failed",
+                detail=f"Close failed: {e}",
+            )
+            await self._record_execution_failure(f"Emergency close failed for {symbol}")
             return {"status": "failed", "error": f"Close failed: {e}"}
 
         finally:
+            EXECUTION_DURATION.labels(strategy="emergency_close").observe(
+                max(0.0, (time.time() * 1000 - start_ms) / 1000)
+            )
             await self._cleanup()
 
     async def emergency_close_auto(self, symbol: str):
@@ -257,6 +451,16 @@ class ArbitrageExecutor:
             bybit_amount = bybit_pos.get("amount", 0.0)
 
             if lighter_amount <= 0 and bybit_amount <= 0:
+                await self._record_emergency_close(
+                    symbol=symbol,
+                    lighter_amount=0.0,
+                    bybit_amount=0.0,
+                    bybit_side="Buy",
+                    start_ms=time.time() * 1000,
+                    status="success",
+                    detail=f"No open positions found for {symbol}.",
+                )
+                circuit_breaker.record_execution_success()
                 return {"status": "success", "detail": f"No open positions found for {symbol}."}
 
             log.info(
@@ -275,6 +479,7 @@ class ArbitrageExecutor:
 
         except Exception as e:
             log.error("emergency_close_auto_failed", error=str(e))
+            await self._record_execution_failure(f"Emergency close auto failed for {symbol}")
             return {"status": "failed", "error": f"Auto-close failed: {str(e)}"}
 
     async def _cleanup(self):
@@ -283,3 +488,27 @@ class ArbitrageExecutor:
             await self.lighter.close()
         except Exception:
             pass
+
+    async def _record_emergency_close(
+        self,
+        symbol: str,
+        lighter_amount: float,
+        bybit_amount: float,
+        bybit_side: str,
+        start_ms: float,
+        status: str,
+        detail: str,
+    ):
+        trade = TradeRecord(
+            ts=time.time() * 1000,
+            symbol=symbol,
+            strategy="emergency_close",
+            side="close",
+            qty_requested=max(float(lighter_amount or 0.0), float(bybit_amount or 0.0)),
+            qty_filled=max(float(lighter_amount or 0.0), float(bybit_amount or 0.0)) if status == "success" else 0.0,
+            bybit_side=bybit_side,
+            duration_ms=time.time() * 1000 - start_ms,
+            status=status,
+            detail=detail,
+        )
+        await record_trade(trade)

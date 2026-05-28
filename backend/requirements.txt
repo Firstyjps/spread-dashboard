@@ -20,10 +20,14 @@ structlog==24.4.0
 pybit>=5.0.0
 eth-account
 git+https://github.com/elliottech/lighter-python.git
+prometheus-client==0.21.1
 # Future production dependencies (uncomment when needed):
 # asyncpg==0.30.0
 # redis[hiredis]==5.2.1
-# prometheus-client==0.21.1
 # sqlalchemy[asyncio]==2.0.36
 # alembic==1.14.0
 slowapi==0.1.9
+
+# Tests
+pytest==8.3.4
+pytest-asyncio==0.24.0

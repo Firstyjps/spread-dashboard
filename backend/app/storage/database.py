@@ -9,7 +9,7 @@ import time
 import structlog
 from typing import Optional
 from app.config import settings
-from app.models import NormalizedTick, FundingSnapshot, SpreadMetric, Alert
+from app.models import NormalizedTick, FundingSnapshot, SpreadMetric, Alert, TradeRecord
 
 log = structlog.get_logger()
 
@@ -121,6 +121,28 @@ async def init_db():
             acknowledged INTEGER DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts DESC);
+
+        CREATE TABLE IF NOT EXISTS trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts REAL NOT NULL,
+            symbol TEXT NOT NULL,
+            strategy TEXT NOT NULL,
+            side TEXT NOT NULL,
+            qty_requested REAL NOT NULL,
+            qty_filled REAL NOT NULL,
+            bybit_side TEXT NOT NULL,
+            bybit_fill_price REAL,
+            bybit_fee REAL,
+            lighter_fill_price REAL,
+            lighter_fee REAL,
+            spread_bps_at_entry REAL,
+            net_pnl_usd REAL,
+            duration_ms REAL,
+            status TEXT NOT NULL,
+            detail TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_trades_ts ON trades(ts DESC);
+        CREATE INDEX IF NOT EXISTS idx_trades_symbol_ts ON trades(symbol, ts DESC);
     """)
     await db.commit()
 
@@ -180,6 +202,22 @@ async def insert_alert(alert: Alert):
            VALUES (?,?,?,?,?,?,?)""",
         (alert.ts, alert.alert_type, alert.symbol, alert.severity,
          alert.message, alert.value, alert.threshold),
+    )
+
+
+async def insert_trade(trade: TradeRecord):
+    db = await _get_db()
+    await db.execute(
+        """INSERT INTO trades
+           (ts, symbol, strategy, side, qty_requested, qty_filled, bybit_side,
+            bybit_fill_price, bybit_fee, lighter_fill_price, lighter_fee,
+            spread_bps_at_entry, net_pnl_usd, duration_ms, status, detail)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (trade.ts, trade.symbol, trade.strategy, trade.side,
+         trade.qty_requested, trade.qty_filled, trade.bybit_side,
+         trade.bybit_fill_price, trade.bybit_fee, trade.lighter_fill_price,
+         trade.lighter_fee, trade.spread_bps_at_entry, trade.net_pnl_usd,
+         trade.duration_ms, trade.status, trade.detail),
     )
 
 
@@ -303,6 +341,37 @@ async def get_recent_alerts(limit: int = 50):
     return [dict(r) for r in rows]
 
 
+async def get_recent_trades(symbol: Optional[str] = None, limit: int = 100) -> list[dict]:
+    db = await _get_db()
+    db.row_factory = aiosqlite.Row
+    safe_limit = max(1, min(int(limit), 500))
+    if symbol:
+        cursor = await db.execute(
+            """SELECT id, ts, symbol, strategy, side, qty_requested, qty_filled,
+                      bybit_side, bybit_fill_price, bybit_fee,
+                      lighter_fill_price, lighter_fee, spread_bps_at_entry,
+                      net_pnl_usd, duration_ms, status, detail
+               FROM trades
+               WHERE symbol = ?
+               ORDER BY ts DESC
+               LIMIT ?""",
+            (symbol, safe_limit),
+        )
+    else:
+        cursor = await db.execute(
+            """SELECT id, ts, symbol, strategy, side, qty_requested, qty_filled,
+                      bybit_side, bybit_fill_price, bybit_fee,
+                      lighter_fill_price, lighter_fee, spread_bps_at_entry,
+                      net_pnl_usd, duration_ms, status, detail
+               FROM trades
+               ORDER BY ts DESC
+               LIMIT ?""",
+            (safe_limit,),
+        )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
 # ─── Maintenance ─────────────────────────────────────────────────
 
 async def cleanup_old_data(days: int = 7) -> int:
@@ -314,7 +383,7 @@ async def cleanup_old_data(days: int = 7) -> int:
         db = await _get_db()
         # NOTE: funding_snapshots is currently never written to (no producer wired);
         # /api/v1/funding fetches live each call. Skipping it avoids a wasteful daily DELETE.
-        for table in ["ticks", "spread_metrics", "alerts"]:
+        for table in ["ticks", "spread_metrics", "alerts", "trades"]:
             try:
                 cursor = await db.execute(
                     f"DELETE FROM {table} WHERE ts < ?", (cutoff_ts,)

@@ -85,6 +85,11 @@ export const api = {
   spreadsHistory: (symbol: string) => fetchJSON<any>(`/spreads/history?symbol=${symbol}`),
   funding: () => fetchJSON<any>('/funding'),
   alerts: (limit = 50) => fetchJSON<any>(`/alerts?limit=${limit}`),
+  trades: (symbol?: string, limit = 100) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (symbol) params.set('symbol', symbol);
+    return fetchJSON<any>(`/trades?${params}`, true);
+  },
   config: () => fetchJSON<any>('/config'),
 
   exportCsvUrl: (symbol: string, minutes = 60) =>

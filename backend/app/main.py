@@ -25,9 +25,12 @@ from app.portfolio.router import router as portfolio_router
 from app.api.auto_hedge_routes import router as auto_hedge_router
 from app.api.sl_tp_routes import router as sl_tp_router
 from app.collectors import bybit_collector, lighter_collector
-from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data
+from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data, get_latest_tick
 from app.storage.database import init_db, insert_tick, insert_spread, close_db, commit as db_commit, cleanup_old_data
-from app.alerts import on_spread_update, close_telegram_session, start_telegram_bot
+from app.alerts import on_spread_update, close_telegram_session, start_telegram_bot, send_system_alert
+from app.metrics import POLL_CYCLE_DURATION, WS_CLIENTS, CONSECUTIVE_ERRORS
+from app.services.circuit_breaker import circuit_breaker
+from app.services.reconciliation import get_reconciliation_service
 
 log = structlog.get_logger()
 
@@ -74,6 +77,15 @@ async def poll_loop():
             except asyncio.TimeoutError:
                 log.error("poll_cycle_timeout", symbols=symbols)
                 _consecutive_errors += 1
+                CONSECUTIVE_ERRORS.set(_consecutive_errors)
+                if _consecutive_errors >= 5:
+                    await send_system_alert(
+                        "poll_degraded",
+                        f"Poll loop has {_consecutive_errors} consecutive errors after timeout",
+                        severity="warning",
+                        value=float(_consecutive_errors),
+                    )
+                POLL_CYCLE_DURATION.observe(time.time() - t0)
                 await asyncio.sleep(max(0.5, interval))
                 continue
 
@@ -105,6 +117,7 @@ async def poll_loop():
 
             # Single batch commit for all inserts this cycle
             await db_commit()
+            await _check_feed_staleness(symbols)
 
             # Broadcast to connected WS clients (filtered by subscription)
             if ws_clients:
@@ -128,8 +141,11 @@ async def poll_loop():
 
             # Reset error counter on success
             _consecutive_errors = 0
+            CONSECUTIVE_ERRORS.set(_consecutive_errors)
+            WS_CLIENTS.set(len(ws_clients))
 
             cycle_ms = (time.time() - t0) * 1000
+            POLL_CYCLE_DURATION.observe(cycle_ms / 1000)
             if cycle_ms > 1500:
                 log.warning("poll_cycle_slow", cycle_ms=round(cycle_ms))
 
@@ -138,6 +154,14 @@ async def poll_loop():
             log.error("poll_loop_error", error=str(e), consecutive=_consecutive_errors)
             if _consecutive_errors >= 5:
                 log.warning("poll_loop_degraded", consecutive_errors=_consecutive_errors)
+                await send_system_alert(
+                    "poll_degraded",
+                    f"Poll loop degraded with {_consecutive_errors} consecutive errors: {e}",
+                    severity="warning",
+                    value=float(_consecutive_errors),
+                )
+            CONSECUTIVE_ERRORS.set(_consecutive_errors)
+            POLL_CYCLE_DURATION.observe(time.time() - t0)
 
         # Sleep remaining interval (maintain consistent timing)
         elapsed = time.time() - t0
@@ -154,8 +178,28 @@ async def _supervised_poll_loop():
             raise  # Propagate cancellation from shutdown
         except Exception as e:
             log.error("poll_loop_crashed", error=str(e))
+            await send_system_alert("poll_crash", f"Poll loop crashed: {e}", severity="critical")
             await asyncio.sleep(2)
             log.info("poll_loop_restarting")
+
+
+async def _check_feed_staleness(symbols: list[str]):
+    now_ms = time.time() * 1000
+    for symbol in symbols:
+        for exchange in ("bybit", "lighter"):
+            tick = get_latest_tick(exchange, symbol)
+            if not tick:
+                continue
+            last_ts = tick.received_at or tick.ts
+            if circuit_breaker.check_feed_staleness(last_ts):
+                age_s = (now_ms - last_ts) / 1000
+                await send_system_alert(
+                    "feed_stale",
+                    f"{exchange} feed for {symbol} is stale for {age_s:.1f}s; circuit breaker tripped",
+                    severity="critical",
+                    value=age_s,
+                    threshold=circuit_breaker.feed_gap_threshold_s,
+                )
 
 
 
@@ -197,6 +241,7 @@ async def lifespan(app: FastAPI):
     global _poll_task, _bot_task, _cleanup_task
     _poll_task = asyncio.create_task(_supervised_poll_loop())
     _cleanup_task = asyncio.create_task(daily_cleanup_loop())
+    await get_reconciliation_service().start()
 
     # Start Telegram bot command listener
     _bot_task = asyncio.create_task(start_telegram_bot())
@@ -223,6 +268,7 @@ async def lifespan(app: FastAPI):
             await _poll_task
         except asyncio.CancelledError:
             pass
+    await get_reconciliation_service().stop()
     # Stop auto-hedge if running
     from app.services.auto_hedge import get_auto_hedge_service
     _hedge_svc = get_auto_hedge_service()
@@ -293,6 +339,7 @@ async def websocket_endpoint(ws: WebSocket, token: str | None = Query(default=No
         return
     await ws.accept()
     ws_clients[ws] = None  # None = subscribed to all (backward compatible)
+    WS_CLIENTS.set(len(ws_clients))
     log.info("ws_client_connected", total=len(ws_clients))
     try:
         # Send initial snapshot (all data)
@@ -340,6 +387,7 @@ async def websocket_endpoint(ws: WebSocket, token: str | None = Query(default=No
         pass
     finally:
         ws_clients.pop(ws, None)
+        WS_CLIENTS.set(len(ws_clients))
         log.info("ws_client_disconnected", total=len(ws_clients))
 
 

@@ -6,7 +6,7 @@ import csv
 import io
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from typing import Optional
 
 from decimal import Decimal
@@ -16,7 +16,10 @@ from app.analytics.cost_model import estimate_net_pnl_bps, cost_breakdown
 from app.collectors import bybit_collector, lighter_collector
 from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
-from app.storage.database import get_recent_spreads, get_spreads_by_time, get_all_spreads, get_recent_alerts
+from app.storage.database import (
+    get_recent_spreads, get_spreads_by_time, get_all_spreads,
+    get_recent_alerts, get_recent_trades,
+)
 from app.config import settings, reload_settings
 from app.utils.percentiles import compute_percentiles
 from app.execution import TradeRequest
@@ -28,6 +31,9 @@ from app.execution.iceberg_executor import (
 from app.execution.rate_limiter import TokenBucketRateLimiter, RateLimiterConfig
 from app.api.auth import require_api_key
 from app.api.rate_limit import limiter
+from app.metrics import generate_latest, CONTENT_TYPE_LATEST, update_db_size_metric
+from app.services.circuit_breaker import circuit_breaker
+from app.services.reconciliation import get_reconciliation_service
 
 log = structlog.get_logger()
 
@@ -208,6 +214,23 @@ async def alerts(limit: int = Query(default=50, le=500)):
     return await get_recent_alerts(limit)
 
 
+@router.get("/trades", dependencies=[Depends(require_api_key)])
+async def trades(
+    symbol: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    """Recent execution journal rows."""
+    normalized = symbol.upper() if symbol else None
+    return await get_recent_trades(normalized, limit)
+
+
+@router.get("/metrics")
+async def metrics():
+    """Prometheus metrics."""
+    update_db_size_metric()
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @router.get("/config")
 async def config():
     """Current configuration (non-sensitive)."""
@@ -346,6 +369,9 @@ def _compute_theoretical_pnl(bybit_pos: dict, lighter_pos: dict, symbol: str) ->
 @router.post("/execute", dependencies=[Depends(require_api_key)])
 @limiter.limit("20/minute")
 async def execute_trade(request: Request, req: TradeRequest):
+    if circuit_breaker.is_tripped:
+        raise HTTPException(status_code=503, detail=circuit_breaker.status())
+
     mapped_side = SIDE_MAP.get(req.side, req.side)
 
     try:
@@ -382,6 +408,9 @@ class ClosePositionRequest(BaseModel):
 @router.post("/execute/close_all", dependencies=[Depends(require_api_key)])
 @limiter.limit("20/minute")
 async def close_all_positions(request: Request, req: ClosePositionRequest):
+    if circuit_breaker.is_tripped:
+        raise HTTPException(status_code=503, detail=circuit_breaker.status())
+
     try:
         async with ArbitrageExecutor(settings) as executor:
             result = await executor.emergency_close_auto(symbol=req.symbol)
@@ -389,6 +418,24 @@ async def close_all_positions(request: Request, req: ClosePositionRequest):
     except Exception as e:
         log.error("close_all_error", symbol=req.symbol, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/circuit-breaker/status")
+async def circuit_breaker_status():
+    return circuit_breaker.status()
+
+
+@router.post("/circuit-breaker/reset", dependencies=[Depends(require_api_key)])
+@limiter.limit("10/minute")
+async def reset_circuit_breaker(request: Request):
+    circuit_breaker.reset()
+    log.info("circuit_breaker_reset_api")
+    return circuit_breaker.status()
+
+
+@router.get("/reconciliation/status")
+async def reconciliation_status():
+    return get_reconciliation_service().status()
 
 
 class MakerTestRequest(BaseModel):

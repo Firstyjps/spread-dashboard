@@ -79,3 +79,23 @@ class Alert(BaseModel):
     message: str
     value: Optional[float] = None
     threshold: Optional[float] = None
+
+
+class TradeRecord(BaseModel):
+    """Persisted execution journal row."""
+    ts: float
+    symbol: str
+    strategy: str  # 'arb_sequential' | 'emergency_close' | 'auto_hedge' | 'sl_tp'
+    side: str  # 'BUY_LIGHTER_SELL_BYBIT' | 'SELL_LIGHTER_BUY_BYBIT' | 'close'
+    qty_requested: float
+    qty_filled: float
+    bybit_side: str  # 'Buy' | 'Sell'
+    bybit_fill_price: Optional[float] = None
+    bybit_fee: Optional[float] = None
+    lighter_fill_price: Optional[float] = None
+    lighter_fee: Optional[float] = None
+    spread_bps_at_entry: Optional[float] = None
+    net_pnl_usd: Optional[float] = None
+    duration_ms: Optional[float] = None
+    status: str  # 'success' | 'partial' | 'aborted' | 'failed' | 'reversed'
+    detail: Optional[str] = None

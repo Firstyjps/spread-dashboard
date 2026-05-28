@@ -10,6 +10,7 @@ from collections import deque
 from typing import Optional, Dict
 from app.models import NormalizedTick, SpreadMetric
 from app.analytics.cost_model import estimate_net_pnl_bps
+from app.metrics import SPREAD_BPS
 
 log = structlog.get_logger()
 
@@ -100,6 +101,10 @@ def compute_spread(symbol: str) -> Optional[SpreadMetric]:
     if symbol not in spread_history:
         spread_history[symbol] = deque(maxlen=ZSCORE_WINDOW)
     spread_history[symbol].append(exchange_spread_mid)
+
+    SPREAD_BPS.labels(symbol=symbol, type="mid").set(exchange_spread_mid * 10_000)
+    SPREAD_BPS.labels(symbol=symbol, type="long").set(long_spread * 10_000)
+    SPREAD_BPS.labels(symbol=symbol, type="short").set(short_spread * 10_000)
 
     return metric
 

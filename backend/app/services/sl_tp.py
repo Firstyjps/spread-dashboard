@@ -17,6 +17,8 @@ from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
 from app.services.executor import ArbitrageExecutor
 from app.config import settings
+from app.models import TradeRecord
+from app.services.trade_journal import record_trade
 
 log = structlog.get_logger()
 
@@ -140,12 +142,26 @@ class SlTpService:
                      type=trigger_type,
                      status=entry["status"],
                      detail=entry["detail"])
+            await self._record_trade(
+                trigger_type=trigger_type,
+                status=entry["status"],
+                detail=entry["detail"],
+                mark_price=mark_price,
+                entry_price=entry_price,
+            )
         except Exception as e:
             entry["status"] = "error"
             entry["error"] = str(e)
             log.error("sl_tp_close_failed",
                       type=trigger_type,
                       error=str(e))
+            await self._record_trade(
+                trigger_type=trigger_type,
+                status="failed",
+                detail=str(e),
+                mark_price=mark_price,
+                entry_price=entry_price,
+            )
 
         self._trigger_log.append(entry)
         if len(self._trigger_log) > MAX_TRIGGER_LOG:
@@ -254,6 +270,30 @@ class SlTpService:
             "started_at": self._started_at,
             "recent_triggers": self._trigger_log[-20:],
         }
+
+    async def _record_trade(
+        self,
+        trigger_type: str,
+        status: str,
+        detail: str,
+        mark_price: float,
+        entry_price: float,
+    ):
+        trade = TradeRecord(
+            ts=time.time() * 1000,
+            symbol=self._symbol,
+            strategy="sl_tp",
+            side="close",
+            qty_requested=0.0,
+            qty_filled=0.0,
+            bybit_side="Sell" if trigger_type == "TP" else "Buy",
+            bybit_fill_price=mark_price,
+            spread_bps_at_entry=None,
+            net_pnl_usd=None,
+            status=status if status in {"success", "partial", "failed"} else "partial",
+            detail=f"{trigger_type} close at {mark_price:.4f} vs entry {entry_price:.4f}: {detail}",
+        )
+        await record_trade(trade)
 
 
 # Module-level singleton

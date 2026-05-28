@@ -9,6 +9,7 @@ import structlog
 from typing import Optional, Dict, Any
 from app.models import NormalizedTick, FundingSnapshot
 from app.config import settings
+from app.metrics import EXCHANGE_LATENCY
 
 log = structlog.get_logger()
 
@@ -51,6 +52,7 @@ async def health_check() -> Dict[str, Any]:
         async with session.get(url) as resp:
             data = await resp.json()
             latency_ms = (time.time() - t0) * 1000
+            EXCHANGE_LATENCY.labels(exchange="bybit").observe(latency_ms / 1000)
             ok = data.get("retCode") == 0
             return {
                 "exchange": "bybit",
@@ -70,6 +72,7 @@ async def fetch_ticker(symbol: str, category: str = "linear") -> Optional[Normal
     """
     url = f"{BASE_URL}/v5/market/tickers"
     params = {"category": category, "symbol": symbol}
+    t0 = time.time()
     try:
         session = await _get_session()
         async with session.get(url, params=params) as resp:
@@ -114,6 +117,8 @@ async def fetch_ticker(symbol: str, category: str = "linear") -> Optional[Normal
     except Exception as e:
         log.error("bybit_ticker_exception", symbol=symbol, error=str(e))
         return None
+    finally:
+        EXCHANGE_LATENCY.labels(exchange="bybit").observe(time.time() - t0)
 
 
 async def fetch_funding_rate(symbol: str) -> Optional[FundingSnapshot]:

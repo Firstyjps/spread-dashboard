@@ -4,16 +4,19 @@ import { useQuery } from '@tanstack/react-query';
 import { api, getApiKey } from './services/api';
 import { useWebSocket } from './hooks/useWebSocket';
 import { OverviewPage } from './components/overview/OverviewPage';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { StalenessIndicator } from './components/common/StalenessIndicator';
 
 const HealthPage = lazy(() => import('./components/health/HealthPage').then(m => ({ default: m.HealthPage })));
 const PortfolioPage = lazy(() => import('./components/portfolio/PortfolioPage').then(m => ({ default: m.PortfolioPage })));
+const TradesPage = lazy(() => import('./components/trades/TradesPage').then(m => ({ default: m.TradesPage })));
 const HistoryPage = lazy(() => import('./components/history/HistoryPage').then(m => ({ default: m.HistoryPage })));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center py-20 text-gray-500 text-sm">Loading…</div>
 );
 
-type Page = 'overview' | 'portfolio' | 'history' | 'health';
+type Page = 'overview' | 'portfolio' | 'trades' | 'history' | 'health';
 
 // Flush buffered WS data to React state at this rate (~4fps)
 const WS_FLUSH_INTERVAL_MS = 250;
@@ -21,9 +24,11 @@ const WS_FLUSH_INTERVAL_MS = 250;
 export default function App() {
   const [page, setPage] = useState<Page>('overview');
   const [wsData, setWsData] = useState<any>(null);
+  const [lastUpdateTs, setLastUpdateTs] = useState<number | null>(null);
 
   // Buffer: WS messages write here without triggering renders
   const wsBufferRef = useRef<any>(null);
+  const wsTsBufferRef = useRef<number | null>(null);
   const hasPendingRef = useRef(false);
 
   // Flush timer: transfers buffer → state at a fixed rate
@@ -32,15 +37,17 @@ export default function App() {
       if (hasPendingRef.current) {
         hasPendingRef.current = false;
         setWsData(wsBufferRef.current);
+        setLastUpdateTs(wsTsBufferRef.current);
       }
     }, WS_FLUSH_INTERVAL_MS);
     return () => clearInterval(timer);
   }, []);
 
   const handleWsMessage = useCallback((msg: unknown) => {
-    const m = msg as { type?: string; data?: Record<string, unknown> };
+    const m = msg as { type?: string; data?: Record<string, unknown>; ts?: number };
     if (m.type === 'update' || m.type === 'snapshot') {
       wsBufferRef.current = m.data ?? null;
+      wsTsBufferRef.current = typeof m.ts === 'number' ? m.ts : Date.now();
       hasPendingRef.current = true;
     }
   }, []);
@@ -82,6 +89,9 @@ export default function App() {
             <NavBtn active={page === 'portfolio'} onClick={() => setPage('portfolio')}>
               Portfolio
             </NavBtn>
+            <NavBtn active={page === 'trades'} onClick={() => setPage('trades')}>
+              Trades
+            </NavBtn>
             <NavBtn active={page === 'history'} onClick={() => setPage('history')}>
               History
             </NavBtn>
@@ -106,31 +116,52 @@ export default function App() {
           <span className="text-text-secondary font-mono tracking-tight text-[10px]">
             {isConnected ? 'LIVE FEED' : 'REST POLLING'}
           </span>
+          <StalenessIndicator lastUpdateTs={lastUpdateTs} />
         </div>
       </nav>
+      <StalenessIndicator lastUpdateTs={lastUpdateTs} variant="banner" />
 
       {/* Content wrapper */}
       <main className="flex-1 flex flex-col min-h-0">
-        {page === 'overview' && <OverviewPage data={priceData} />}
+        {page === 'overview' && (
+          <ErrorBoundary resetKey={page}>
+            <OverviewPage data={priceData} />
+          </ErrorBoundary>
+        )}
         {page === 'portfolio' && (
           <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
-            <Suspense fallback={<PageFallback />}>
-              <PortfolioPage />
-            </Suspense>
+            <ErrorBoundary resetKey={page}>
+              <Suspense fallback={<PageFallback />}>
+                <PortfolioPage />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
+        )}
+        {page === 'trades' && (
+          <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
+            <ErrorBoundary resetKey={page}>
+              <Suspense fallback={<PageFallback />}>
+                <TradesPage />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         )}
         {page === 'history' && (
           <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
-            <Suspense fallback={<PageFallback />}>
-              <HistoryPage />
-            </Suspense>
+            <ErrorBoundary resetKey={page}>
+              <Suspense fallback={<PageFallback />}>
+                <HistoryPage />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         )}
         {page === 'health' && (
           <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
-            <Suspense fallback={<PageFallback />}>
-              <HealthPage />
-            </Suspense>
+            <ErrorBoundary resetKey={page}>
+              <Suspense fallback={<PageFallback />}>
+                <HealthPage />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         )}
       </main>

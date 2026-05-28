@@ -9,6 +9,7 @@ Commands:
   /set SYMBOL UP LOW   - Change thresholds at runtime
   /mute [minutes]      - Mute alerts (default 30 min)
   /unmute              - Resume alerts
+  /resume              - Reset execution circuit breaker
   /history [SYMBOL]    - Last 10 alerts from DB
   /ping                - Health check
   /help                - Show available commands
@@ -75,6 +76,7 @@ async def _cmd_help(chat_id: str, _args: str, session: aiohttp.ClientSession) ->
         "/set SYMBOL UPPER LOWER — Change threshold\n"
         "/mute [minutes] — Mute alerts (default 30)\n"
         "/unmute — Resume alerts\n"
+        "/resume — Reset execution circuit breaker\n"
         "/history [SYMBOL] — Last 10 alerts\n"
         "/ping — Health check"
     )
@@ -177,6 +179,12 @@ async def _cmd_unmute(chat_id: str, _args: str, session: aiohttp.ClientSession) 
     return "\U0001f50a Alerts unmuted — notifications resumed"
 
 
+async def _cmd_resume(chat_id: str, _args: str, session: aiohttp.ClientSession) -> str:
+    from app.services.circuit_breaker import circuit_breaker
+    circuit_breaker.reset()
+    return "\u2705 Circuit breaker reset — executions may resume"
+
+
 async def _cmd_history(chat_id: str, args: str, session: aiohttp.ClientSession) -> str:
     from app.storage.database import get_recent_alerts
     symbol = args.strip().upper() if args.strip() else None
@@ -219,6 +227,7 @@ _COMMANDS = {
     "/set": _cmd_set,
     "/mute": _cmd_mute,
     "/unmute": _cmd_unmute,
+    "/resume": _cmd_resume,
     "/history": _cmd_history,
 }
 

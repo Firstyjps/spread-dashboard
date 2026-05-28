@@ -14,6 +14,8 @@ from typing import Optional
 from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
 from app.config import settings
+from app.models import TradeRecord
+from app.services.trade_journal import record_trade
 
 log = structlog.get_logger()
 
@@ -131,6 +133,12 @@ class AutoHedgeService:
                          symbol=self._symbol,
                          delta=round(delta, 6),
                          tx_hash=entry["tx_hash"])
+                await self._record_trade(
+                    delta=delta,
+                    amount=amount,
+                    status="success",
+                    detail=f"Lighter hedge tx={entry['tx_hash']}",
+                )
 
             except Exception as e:
                 # Don't update last_signed_pos — will retry next cycle
@@ -140,6 +148,12 @@ class AutoHedgeService:
                           symbol=self._symbol,
                           delta=round(delta, 6),
                           error=str(e))
+                await self._record_trade(
+                    delta=delta,
+                    amount=amount,
+                    status="failed",
+                    detail=str(e),
+                )
 
             self._hedge_log.append(entry)
             if len(self._hedge_log) > MAX_HEDGE_LOG:
@@ -230,6 +244,21 @@ class AutoHedgeService:
             "started_at": self._started_at,
             "recent_hedges": self._hedge_log[-20:],
         }
+
+    async def _record_trade(self, delta: float, amount: float, status: str, detail: str):
+        is_ask = delta > 0
+        trade = TradeRecord(
+            ts=time.time() * 1000,
+            symbol=self._symbol,
+            strategy="auto_hedge",
+            side="SELL_LIGHTER_BUY_BYBIT" if is_ask else "BUY_LIGHTER_SELL_BYBIT",
+            qty_requested=amount,
+            qty_filled=amount if status == "success" else 0.0,
+            bybit_side="Buy" if delta > 0 else "Sell",
+            status=status,
+            detail=detail,
+        )
+        await record_trade(trade)
 
 
 # Module-level singleton
