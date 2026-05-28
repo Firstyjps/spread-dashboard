@@ -71,10 +71,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-brand-base text-text-primary flex flex-col font-sans select-none">
       {/* Sticky Topbar */}
-      <nav className="sticky top-0 z-40 bg-brand-base/80 backdrop-blur-md border-b border-border-subtle h-11 sm:h-12 flex items-center px-3 sm:px-4 justify-between overflow-hidden">
-        <div className="flex min-w-0 flex-1 items-center justify-start gap-3 sm:flex-none sm:gap-6">
+      <nav className="sticky top-0 z-40 bg-brand-base/80 backdrop-blur-md border-b border-border-subtle h-11 sm:h-12 flex items-center px-2 sm:px-4 justify-between overflow-hidden">
+        <div className="flex min-w-0 flex-1 items-center justify-center sm:flex-none sm:justify-start sm:gap-6">
           {/* Logo */}
-          <div className="flex shrink-0 items-center gap-1.5 cursor-pointer" onClick={() => setPage('overview')}>
+          <div className="hidden sm:flex shrink-0 items-center gap-1.5 cursor-pointer" onClick={() => setPage('overview')}>
             <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm bg-gradient-to-tr from-accent-amber to-accent-indigo shadow-[0_0_10px_rgba(245,166,35,0.4)]" />
             <span className="font-mono font-bold text-[11px] sm:text-xs tracking-wider text-text-primary">
               spread<span className="text-accent-amber">.</span>dash
@@ -82,7 +82,7 @@ export default function App() {
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex h-11 min-w-0 items-center justify-start sm:h-12">
+          <div className="grid h-11 w-full min-w-0 grid-cols-4 items-center sm:flex sm:h-12 sm:w-auto sm:justify-start">
             <NavBtn active={page === 'overview'} onClick={() => setPage('overview')}>
               Overview
             </NavBtn>
@@ -183,7 +183,7 @@ function NavBtn({
   return (
     <button
       onClick={onClick}
-      className={`px-1.5 h-11 text-[11px] font-medium border-b-2 transition-colors duration-150 whitespace-nowrap sm:h-12 sm:px-3 sm:text-xs ${
+      className={`flex h-11 w-full items-center justify-center px-0.5 text-[11px] font-semibold border-b-2 transition-colors duration-150 whitespace-nowrap sm:h-12 sm:w-auto sm:px-3 sm:text-xs sm:font-medium ${
         active
           ? 'border-accent-amber text-text-primary'
           : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-strong'
