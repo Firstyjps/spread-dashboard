@@ -292,8 +292,8 @@ async def get_spreads_by_time(symbol: str, minutes: int = 5, max_rows: int = 200
     return [dict(r) for r in rows]
 
 
-async def get_all_spreads(symbol: str, max_rows: int = 5000):
-    """Get ALL spread data for a symbol (downsampled to max_rows, slim cols).
+async def get_all_spreads(symbol: str, max_rows: int = 5000, since_ts: Optional[float] = None):
+    """Get spread data for a symbol (downsampled to max_rows, slim cols).
 
     Strategy: index-only scan to grab all ids for the symbol, stride-sample
     in Python, then fetch the sampled rows by id IN (...). Avoids the
@@ -302,10 +302,16 @@ async def get_all_spreads(symbol: str, max_rows: int = 5000):
     db = await _get_db()
     db.row_factory = aiosqlite.Row
 
-    id_cursor = await db.execute(
-        "SELECT id FROM spread_metrics WHERE symbol = ? ORDER BY ts ASC",
-        (symbol,),
-    )
+    if since_ts is not None:
+        id_cursor = await db.execute(
+            "SELECT id FROM spread_metrics WHERE symbol = ? AND ts >= ? ORDER BY ts ASC",
+            (symbol, since_ts),
+        )
+    else:
+        id_cursor = await db.execute(
+            "SELECT id FROM spread_metrics WHERE symbol = ? ORDER BY ts ASC",
+            (symbol,),
+        )
     ids = [r[0] for r in await id_cursor.fetchall()]
     if not ids:
         return []

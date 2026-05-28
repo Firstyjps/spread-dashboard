@@ -128,21 +128,26 @@ async def spreads(
 
 
 @router.get("/spreads/history")
-async def spreads_history(symbol: str = "XAUTUSDT"):
-    """All historical spread data (downsampled to 5k points; 30s server cache)."""
-    cached = _cache_get(f"history:{symbol}")
+async def spreads_history(
+    symbol: str = "XAUTUSDT",
+    days: int = Query(default=90, ge=1, le=365),
+):
+    """Historical spread data for the requested day window (downsampled to 5k points)."""
+    cached = _cache_get(f"history:{symbol}:{days}")
     if cached is not None:
         return cached
-    history = await get_all_spreads(symbol)
+    since_ts = (_time.time() - days * 86400) * 1000
+    history = await get_all_spreads(symbol, since_ts=since_ts)
     mid_values = [row.get("exchange_spread_mid") for row in history]
     stats = compute_percentiles(mid_values)
     payload = {
         "symbol": symbol,
+        "days": days,
         "history": history,
         "count": len(history),
         "stats": stats.to_dict(),
     }
-    _cache_set(f"history:{symbol}", payload)
+    _cache_set(f"history:{symbol}:{days}", payload)
     return payload
 
 

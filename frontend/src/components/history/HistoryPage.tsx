@@ -16,6 +16,7 @@ import { api } from '../../services/api';
 import type { SpreadRow, ChartPoint } from '../../types/api';
 
 const MAX_CHART_POINTS = 768;
+const HISTORY_DAYS = 90;
 
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 
@@ -53,8 +54,8 @@ export const HistoryPage = React.memo(function HistoryPage() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['spreads-history', symbol],
-    queryFn: () => api.spreadsHistory(symbol),
+    queryKey: ['spreads-history', symbol, HISTORY_DAYS],
+    queryFn: () => api.spreadsHistory(symbol, HISTORY_DAYS),
     staleTime: 60000,
   });
 
@@ -104,11 +105,11 @@ export const HistoryPage = React.memo(function HistoryPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-400 uppercase">
-            Historical Spread — {symbol} (bps)
+            Historical Spread — {symbol} (bps) · {HISTORY_DAYS}D
           </h2>
           {dateRange && (
             <p className="text-xs text-gray-500 mt-1">
-              {dateRange.from} — {dateRange.to} ({dateRange.days} days)
+              {dateRange.from} — {dateRange.to} ({dateRange.days} days available)
             </p>
           )}
         </div>

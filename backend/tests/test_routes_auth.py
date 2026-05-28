@@ -63,11 +63,12 @@ def test_sl_tp_start_requires_api_key(client):
 
 
 def test_spreads_history_no_auth(client):
-    r = client.get("/api/v1/spreads/history?symbol=XAUTUSDT")
+    r = client.get("/api/v1/spreads/history?symbol=XAUTUSDT&days=90")
     # In test env, DB is empty in :memory:, expect 200 with empty history
     assert r.status_code == 200
     body = r.json()
     assert body["symbol"] == "XAUTUSDT"
+    assert body["days"] == 90
     assert isinstance(body["history"], list)
     assert "stats" in body
 

@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     alert_lower_bps: float = 30.0
 
     # Data retention — daily cleanup runs, deletes rows older than this
-    data_retention_days: int = 30
+    data_retention_days: int = 90
 
     # API auth (header X-API-Key) — required for write endpoints
     api_key: str = ""
