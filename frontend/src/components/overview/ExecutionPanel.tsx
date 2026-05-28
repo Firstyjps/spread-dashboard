@@ -42,7 +42,7 @@ interface TradeLog {
   detail: string;
 }
 
-const QUICK_AMOUNTS = [0.001, 0.01, 0.1, 1.0];
+const QUICK_AMOUNTS = [1, 2, 4, 5];
 const STORAGE_KEY = 'spread-dashboard-trade-log';
 
 function loadTradeLog(): TradeLog[] {
@@ -76,7 +76,7 @@ export const ExecutionPanel = React.memo(
     { symbol, onTradeExecuted },
     ref
   ) {
-    const [amount, setAmount] = useState('0.01');
+    const [amount, setAmount] = useState('1');
     const [loading, setLoading] = useState(false);
     const [bybitPos, setBybitPos] = useState<PositionData | null>(null);
     const [lighterPos, setLighterPos] = useState<PositionData | null>(null);
@@ -416,7 +416,7 @@ export const ExecutionPanel = React.memo(
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                step="0.001"
+                step="1"
                 min="0"
                 className="w-full bg-transparent border-0 outline-none text-text-primary text-sm font-mono font-bold py-2 focus:ring-0"
                 placeholder="0.00"
@@ -429,7 +429,7 @@ export const ExecutionPanel = React.memo(
             {/* Presets */}
             <div className="flex gap-1">
               {QUICK_AMOUNTS.map((q) => {
-                const isDefault = q === 0.01;
+                const isDefault = q === 1;
                 const isSelected = amount === String(q);
                 return (
                   <button

@@ -1,5 +1,5 @@
 // file: frontend/src/components/overview/SpreadChart.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { SpreadRow, ChartPoint } from '../../types/api';
 import {
@@ -33,6 +33,7 @@ const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 const CHART_MARGIN = { top: 10, right: 10, bottom: 5, left: 0 };
 const AXIS_TICK = { fill: '#8c8c94', fontSize: 9, fontFamily: 'Geist Mono' };
 const Y_DOMAIN: [string, string] = ['auto', 'auto'];
+const MOBILE_QUERY = '(max-width: 639px)';
 
 const TOOLTIP_CONTENT_STYLE = {
   backgroundColor: '#111113',
@@ -47,6 +48,18 @@ const TOOLTIP_CONTENT_STYLE = {
 export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
   const [selectedRange, setSelectedRange] = useState<TimeRange>(TIME_RANGES[1]); // default 4h
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(MOBILE_QUERY).matches : false
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_QUERY);
+    const updateIsMobile = () => setIsMobile(media.matches);
+
+    updateIsMobile();
+    media.addEventListener('change', updateIsMobile);
+    return () => media.removeEventListener('change', updateIsMobile);
+  }, []);
 
   const toggleLine = (dataKey: string) => {
     setHiddenLines((prev) => {
@@ -217,34 +230,36 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                   itemStyle={{ padding: '2px 0' }}
                   cursor={{ stroke: '#2a2a2f', strokeDasharray: '3 3' }}
                 />
-                <Legend
-                  wrapperStyle={{
-                    fontSize: 9,
-                    fontFamily: 'Geist Mono',
-                    fontWeight: 'bold',
-                    paddingTop: 8,
-                    cursor: 'pointer',
-                  }}
-                  onClick={(e: any) => {
-                    if (e?.dataKey && typeof e.dataKey === 'string') toggleLine(e.dataKey);
-                  }}
-                  formatter={(value: string, entry: any) => {
-                    const key = typeof entry.dataKey === 'string' ? entry.dataKey : '';
-                    const isHidden = hiddenLines.has(key);
-                    return (
-                      <span
-                        style={{
-                          color: isHidden ? '#4a4a54' : entry.color,
-                          textDecoration: isHidden ? 'line-through' : 'none',
-                          paddingLeft: 4,
-                          paddingRight: 12,
-                        }}
-                      >
-                        {value}
-                      </span>
-                    );
-                  }}
-                />
+                {!isMobile && (
+                  <Legend
+                    wrapperStyle={{
+                      fontSize: 9,
+                      fontFamily: 'Geist Mono',
+                      fontWeight: 'bold',
+                      paddingTop: 8,
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e: any) => {
+                      if (e?.dataKey && typeof e.dataKey === 'string') toggleLine(e.dataKey);
+                    }}
+                    formatter={(value: string, entry: any) => {
+                      const key = typeof entry.dataKey === 'string' ? entry.dataKey : '';
+                      const isHidden = hiddenLines.has(key);
+                      return (
+                        <span
+                          style={{
+                            color: isHidden ? '#4a4a54' : entry.color,
+                            textDecoration: isHidden ? 'line-through' : 'none',
+                            paddingLeft: 4,
+                            paddingRight: 12,
+                          }}
+                        >
+                          {value}
+                        </span>
+                      );
+                    }}
+                  />
+                )}
                 <ReferenceLine y={0} stroke="#2a2a2f" strokeDasharray="3 3" />
                 <Line
                   type="monotone"
@@ -254,30 +269,34 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                   dot={false}
                   name="Mid Spread"
                   isAnimationActive={false}
-                  hide={hiddenLines.has('mid_spread')}
+                  hide={!isMobile && hiddenLines.has('mid_spread')}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="long_spread"
-                  stroke="#6366f1"
-                  strokeWidth={1.2}
-                  dot={false}
-                  name="Long Spread"
-                  isAnimationActive={false}
-                  hide={hiddenLines.has('long_spread')}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="short_spread"
-                  stroke="#00d4ff"
-                  strokeWidth={1.2}
-                  dot={false}
-                  name="Short Spread"
-                  isAnimationActive={false}
-                  hide={hiddenLines.has('short_spread')}
-                />
+                {!isMobile && (
+                  <>
+                    <Line
+                      type="monotone"
+                      dataKey="long_spread"
+                      stroke="#6366f1"
+                      strokeWidth={1.2}
+                      dot={false}
+                      name="Long Spread"
+                      isAnimationActive={false}
+                      hide={hiddenLines.has('long_spread')}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="short_spread"
+                      stroke="#00d4ff"
+                      strokeWidth={1.2}
+                      dot={false}
+                      name="Short Spread"
+                      isAnimationActive={false}
+                      hide={hiddenLines.has('short_spread')}
+                    />
+                  </>
+                )}
                 {/* Percentile guide lines */}
-                {showPercentiles && (
+                {showPercentiles && !isMobile && (
                   <ReferenceLine
                     y={p10Bps!}
                     stroke="#6366f1"
@@ -286,7 +305,7 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                     opacity={0.4}
                   />
                 )}
-                {showPercentiles && (
+                {showPercentiles && !isMobile && (
                   <ReferenceLine
                     y={p90Bps!}
                     stroke="#00d4ff"

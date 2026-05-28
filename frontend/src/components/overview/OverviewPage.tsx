@@ -149,7 +149,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
   return (
     <div className="flex-1 flex flex-col lg:flex-row min-h-0 divide-y lg:divide-y-0 lg:divide-x divide-border-subtle">
       {/* 1. SIDEBAR (220px) */}
-      <aside className="w-full lg:w-[220px] shrink-0 bg-brand-base flex flex-col p-4 space-y-4">
+      <aside className="hidden lg:flex w-[220px] shrink-0 bg-brand-base flex-col p-4 space-y-4">
         <div>
           <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-2.5">
             Trading Pairs
@@ -214,7 +214,9 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
       {/* 2. MAIN CONTENT (Flex: 1) */}
       <section className="flex-1 min-w-0 bg-brand-base flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6">
         {/* Compact Auto-Hedge row */}
-        <AutoHedgePanel />
+        <div className="hidden lg:block">
+          <AutoHedgePanel />
+        </div>
 
         {/* Hero Spread Card */}
         <div className="bg-brand-panel border border-border-subtle rounded-lg p-5 relative overflow-hidden flex flex-col">
@@ -332,7 +334,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
         </div>
 
         {/* Funding Rates Section */}
-        <div className="pt-5 lg:pt-0">
+        <div className="hidden lg:block pt-5 lg:pt-0">
           <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-3">
             Funding Arb Edge
           </h3>
@@ -384,7 +386,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
         </div>
 
         {/* Activity / Alert Log Section */}
-        <div className="pt-5 lg:pt-0 flex-1 flex flex-col min-h-[160px]">
+        <div className="hidden lg:flex pt-5 lg:pt-0 flex-1 flex-col min-h-[160px]">
           <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-2.5">
             System Operations Log
           </h3>
