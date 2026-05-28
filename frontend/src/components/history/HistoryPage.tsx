@@ -19,17 +19,20 @@ const MAX_CHART_POINTS = 768;
 
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 
-const CHART_MARGIN = { top: 5, right: 5, bottom: 5, left: 5 };
-const AXIS_TICK = { fill: '#6b7280', fontSize: 10 };
+const CHART_MARGIN = { top: 10, right: 10, bottom: 5, left: 0 };
+const AXIS_TICK = { fill: '#8c8c94', fontSize: 9, fontFamily: 'Geist Mono' };
 const Y_DOMAIN: [string, string] = ['auto', 'auto'];
 const TOOLTIP_CONTENT_STYLE = {
-  backgroundColor: '#1f2937',
-  border: '1px solid #374151',
-  borderRadius: 8,
-  fontSize: 12,
+  backgroundColor: '#111113',
+  border: '1px solid #2a2a2f',
+  borderRadius: 6,
+  fontSize: 11,
+  fontFamily: 'Geist Mono',
+  color: '#ededed',
+  boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
 };
-const TOOLTIP_LABEL_STYLE = { color: '#9ca3af' };
-const LEGEND_WRAPPER_STYLE = { fontSize: 11, cursor: 'pointer' };
+const TOOLTIP_LABEL_STYLE = { color: '#8c8c94' };
+const LEGEND_WRAPPER_STYLE = { fontSize: 9, fontFamily: 'Geist Mono', fontWeight: 'bold', cursor: 'pointer' };
 
 export const HistoryPage = React.memo(function HistoryPage() {
   const [symbol] = useState('XAUTUSDT');
@@ -135,14 +138,14 @@ export const HistoryPage = React.memo(function HistoryPage() {
         </div>
       )}
 
-      <div className="h-[70vh] bg-gray-900 rounded-lg border border-gray-800 p-3">
+      <div className="h-[70vh] bg-brand-panel rounded-lg border border-border-subtle p-3">
         {isLoading ? (
-          <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-            Loading historical data...
+          <div className="h-full flex items-center justify-center text-text-dim font-mono text-sm">
+            LOADING HISTORICAL DATA...
           </div>
         ) : chartData.length < 2 ? (
-          <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-            No historical data available ({chartData.length} points)
+          <div className="h-full flex items-center justify-center text-text-dim font-mono text-sm">
+            NO HISTORICAL DATA AVAILABLE ({chartData.length} points)
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -150,16 +153,24 @@ export const HistoryPage = React.memo(function HistoryPage() {
               <XAxis
                 dataKey="time"
                 tick={AXIS_TICK}
-                interval="preserveStartEnd"
+                stroke="#1f1f23"
+                tickLine={false}
+                axisLine={false}
+                minTickGap={80}
               />
               <YAxis
                 tick={AXIS_TICK}
                 domain={Y_DOMAIN}
-                width={50}
+                stroke="#1f1f23"
+                tickLine={false}
+                axisLine={false}
+                width={40}
               />
               <Tooltip
                 contentStyle={TOOLTIP_CONTENT_STYLE}
                 labelStyle={TOOLTIP_LABEL_STYLE}
+                itemStyle={{ padding: '2px 0' }}
+                cursor={{ stroke: '#2a2a2f', strokeDasharray: '3 3' }}
                 labelFormatter={(_, payload) => {
                   if (payload?.[0]?.payload?.fullTime) return payload[0].payload.fullTime;
                   return '';
@@ -174,22 +185,25 @@ export const HistoryPage = React.memo(function HistoryPage() {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 formatter={(value: string, entry: any) => {
                   const key = typeof entry.dataKey === 'string' ? entry.dataKey : '';
+                  const isHidden = hiddenLines.has(key);
                   return (
                     <span style={{
-                      color: hiddenLines.has(key) ? '#4b5563' : entry.color,
-                      textDecoration: hiddenLines.has(key) ? 'line-through' : 'none',
+                      color: isHidden ? '#4a4a54' : entry.color,
+                      textDecoration: isHidden ? 'line-through' : 'none',
+                      paddingLeft: 4,
+                      paddingRight: 12,
                     }}>
                       {value}
                     </span>
                   );
                 }}
               />
-              <ReferenceLine y={0} stroke="#4b5563" strokeDasharray="3 3" />
+              <ReferenceLine y={0} stroke="#2a2a2f" strokeDasharray="3 3" />
               <Line
                 type="monotone"
                 dataKey="mid_spread"
-                stroke="#34d399"
-                strokeWidth={1.5}
+                stroke="#f5a623"
+                strokeWidth={1.8}
                 dot={false}
                 name="Mid Spread"
                 isAnimationActive={false}
@@ -198,8 +212,8 @@ export const HistoryPage = React.memo(function HistoryPage() {
               <Line
                 type="monotone"
                 dataKey="long_spread"
-                stroke="#60a5fa"
-                strokeWidth={1}
+                stroke="#6366f1"
+                strokeWidth={1.2}
                 dot={false}
                 name="Long Spread"
                 isAnimationActive={false}
@@ -208,8 +222,8 @@ export const HistoryPage = React.memo(function HistoryPage() {
               <Line
                 type="monotone"
                 dataKey="short_spread"
-                stroke="#f87171"
-                strokeWidth={1}
+                stroke="#00d4ff"
+                strokeWidth={1.2}
                 dot={false}
                 name="Short Spread"
                 isAnimationActive={false}
@@ -218,26 +232,26 @@ export const HistoryPage = React.memo(function HistoryPage() {
               {showPercentiles && (
                 <ReferenceLine
                   y={p10Bps!}
-                  stroke="#38bdf8"
-                  strokeDasharray="6 3"
-                  strokeWidth={1}
-                  ifOverflow="extendDomain"
+                  stroke="#6366f1"
+                  strokeDasharray="4 4"
+                  strokeWidth={0.8}
+                  opacity={0.4}
                 />
               )}
               {showPercentiles && (
                 <ReferenceLine
                   y={p90Bps!}
-                  stroke="#f472b6"
-                  strokeDasharray="6 3"
-                  strokeWidth={1}
-                  ifOverflow="extendDomain"
+                  stroke="#00d4ff"
+                  strokeDasharray="4 4"
+                  strokeWidth={0.8}
+                  opacity={0.4}
                 />
               )}
               <Brush
                 dataKey="time"
-                height={30}
-                stroke="#374151"
-                fill="#111827"
+                height={24}
+                stroke="#2a2a2f"
+                fill="#111113"
                 tickFormatter={() => ''}
               />
             </LineChart>

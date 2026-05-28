@@ -1,5 +1,5 @@
 // file: frontend/src/components/overview/OverviewPage.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { SpreadChart } from './SpreadChart';
@@ -11,51 +11,20 @@ interface Props {
   data: SymbolDataMap | null;
 }
 
-const STORAGE_KEY = 'spread-dashboard-visible-symbols';
-
-function loadVisibleSymbols(): Set<string> | null {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return new Set(JSON.parse(stored));
-  } catch {}
-  return null;
+interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'info' | 'error';
 }
 
-function saveVisibleSymbols(symbols: Set<string>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...symbols]));
-}
-
-// Helper: color Z-Score by intensity
-function zsColor(z: number | null | undefined): string {
-  if (z == null) return 'text-gray-500';
-  const abs = Math.abs(z);
-  if (abs >= 2.0) return 'text-orange-400';
-  if (abs >= 1.0) return 'text-yellow-400';
-  return 'text-gray-400';
-}
-
-// Helper: color imbalance value
-function imbColor(v: number | null | undefined): string {
-  if (v == null) return 'text-gray-500';
-  if (v > 0.3) return 'text-green-400';
-  if (v < -0.3) return 'text-red-400';
-  return 'text-gray-400';
-}
-
-// Helper: format imbalance
-function fmtImb(v: number | null | undefined): string {
-  if (v == null) return '-';
-  return `${v > 0 ? '+' : ''}${v.toFixed(2)}`;
-}
-
-// Helper: feed staleness dot color
 function staleDot(d: SymbolData | undefined): string {
-  const bybitAge = d?.bybit?.received_at ? (Date.now() - d.bybit.received_at) / 1000 : 999;
-  const lighterAge = d?.lighter?.received_at ? (Date.now() - d.lighter.received_at) / 1000 : 999;
+  if (!d) return 'bg-text-dim';
+  const bybitAge = d.bybit?.received_at ? (Date.now() - d.bybit.received_at) / 1000 : 999;
+  const lighterAge = d.lighter?.received_at ? (Date.now() - d.lighter.received_at) / 1000 : 999;
   const maxAge = Math.max(bybitAge, lighterAge);
-  if (maxAge < 5) return 'bg-green-400';
-  if (maxAge < 15) return 'bg-yellow-400';
-  return 'bg-red-400';
+  if (maxAge < 5) return 'bg-accent-green';
+  if (maxAge < 15) return 'bg-accent-amber';
+  return 'bg-accent-red';
 }
 
 export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
@@ -65,430 +34,408 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
     refetchInterval: 30000,
     staleTime: 25000,
   });
+
   const { data: alertsData } = useQuery({
     queryKey: ['alerts'],
-    queryFn: () => api.alerts(10),
-    refetchInterval: 15000,
-    staleTime: 10000,
+    queryFn: () => api.alerts(20),
+    refetchInterval: 10000,
+    staleTime: 8000,
   });
 
-  // All symbols from data
+  // Extract all symbols
   const allSymbols = useMemo(() => (data ? Object.keys(data) : []), [data]);
 
-  // Visible symbols (persisted in localStorage)
-  const [visibleSymbols, setVisibleSymbols] = useState<Set<string>>(() => {
-    const stored = loadVisibleSymbols();
-    return stored ?? new Set(allSymbols);
-  });
+  // Active symbol context state
+  const [activeSymbol, setActiveSymbol] = useState<string>('');
 
-  // When new symbols appear (e.g., first load), auto-add them if no stored preference
+  // Fallback to first symbol
   useEffect(() => {
-    if (allSymbols.length > 0 && visibleSymbols.size === 0) {
-      const stored = loadVisibleSymbols();
-      if (!stored) {
-        setVisibleSymbols(new Set(allSymbols));
+    if (allSymbols.length > 0) {
+      if (!activeSymbol || !allSymbols.includes(activeSymbol)) {
+        if (allSymbols.includes('XAUTUSDT')) {
+          setActiveSymbol('XAUTUSDT');
+        } else {
+          setActiveSymbol(allSymbols[0]);
+        }
       }
     }
-  }, [allSymbols]);
+  }, [allSymbols, activeSymbol]);
 
-  const toggleSymbol = (sym: string) => {
-    setVisibleSymbols((prev) => {
-      const next = new Set(prev);
-      if (next.has(sym)) {
-        next.delete(sym);
-      } else {
-        next.add(sym);
+  // Toast notifications state
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 2500);
+  }, []);
+
+  // Keyboard shortcut executors
+  const executionPanelRef = useRef<{ executeBuy: () => void; executeSell: () => void } | null>(null);
+
+  const handleBuyShortcut = useCallback(() => {
+    if (executionPanelRef.current) executionPanelRef.current.executeBuy();
+  }, []);
+
+  const handleSellShortcut = useCallback(() => {
+    if (executionPanelRef.current) executionPanelRef.current.executeSell();
+  }, []);
+
+  // Set up keyboard listeners (B / S keys)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
       }
-      saveVisibleSymbols(next);
-      return next;
-    });
-  };
-
-  const selectAll = () => {
-    const next = new Set(allSymbols);
-    setVisibleSymbols(next);
-    saveVisibleSymbols(next);
-  };
-
-  const selectNone = () => {
-    const next = new Set<string>();
-    setVisibleSymbols(next);
-    saveVisibleSymbols(next);
-  };
-
-  // Filtered symbols
-  const filteredSymbols = allSymbols.filter((s) => visibleSymbols.has(s));
+      const key = e.key.toUpperCase();
+      if (key === 'B') {
+        e.preventDefault();
+        handleBuyShortcut();
+      } else if (key === 'S') {
+        e.preventDefault();
+        handleSellShortcut();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleBuyShortcut, handleSellShortcut]);
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
-        <div className="text-center">
-          <div className="animate-pulse text-2xl mb-2">⏳</div>
-          Waiting for price data...
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-text-secondary">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 rounded-full border-2 border-accent-amber/30 border-t-accent-amber animate-spin mx-auto" />
+          <p className="text-xs font-mono tracking-tight text-text-dim">CONNECTING TO EXCHANGES...</p>
         </div>
       </div>
     );
   }
 
+  const activeData = data[activeSymbol];
+  const spread = activeData?.spread;
+  const spreadBpsVal = spread ? spread.exchange_spread_mid * 10000 : null;
+  const spreadBps = spreadBpsVal != null ? spreadBpsVal.toFixed(2) : '-';
+  
+  const bybitMid = activeData?.bybit?.mid;
+  const lighterMid = activeData?.lighter?.mid;
+  
+  const longBps = spread ? (spread.long_spread * 10000).toFixed(2) : '-';
+  const shortBps = spread ? (spread.short_spread * 10000).toFixed(2) : '-';
+  const baBybit = spread ? (spread.bid_ask_spread_bybit * 10000).toFixed(2) : '-';
+  const baLighter = spread ? (spread.bid_ask_spread_lighter * 10000).toFixed(2) : '-';
+  const netPnl = activeData?.net_pnl_bps;
+  const latBybit = activeData?.latency_bybit != null ? Math.round(activeData.latency_bybit) : null;
+  const latLighter = activeData?.latency_lighter != null ? Math.round(activeData.latency_lighter) : null;
+
+  // Active Symbol's Funding
+  const activeFunding = fundingData?.[activeSymbol];
+  const bybitFunding = activeFunding?.bybit?.funding_rate;
+  const lighterFunding = activeFunding?.lighter?.funding_rate;
+  const netFunding8h = (bybitFunding != null && lighterFunding != null)
+    ? (bybitFunding - lighterFunding * 8)
+    : null;
+
+  // Countdown for next funding
+  const nextFundingMs = activeFunding?.bybit?.next_funding_time;
+  const countdown = nextFundingMs ? Math.max(0, nextFundingMs - Date.now()) : null;
+  const countdownMin = countdown != null ? Math.floor(countdown / 60000) : null;
+
   return (
-    <div className="space-y-6">
-      {/* Symbol Selector */}
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase">Symbols</h2>
-          <div className="flex gap-2 text-xs">
-            <button
-              onClick={selectAll}
-              className="text-emerald-400 hover:text-emerald-300 transition-colors"
-            >
-              All
-            </button>
-            <span className="text-gray-600">|</span>
-            <button
-              onClick={selectNone}
-              className="text-gray-400 hover:text-gray-300 transition-colors"
-            >
-              None
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {allSymbols.map((sym) => {
-            const isActive = visibleSymbols.has(sym);
-            const d = data[sym];
-            const spread = d?.spread;
-            const spreadVal = spread ? spread.exchange_spread_mid * 10000 : null;
-
-            return (
-              <button
-                key={sym}
-                onClick={() => toggleSymbol(sym)}
-                className={`
-                  px-3 py-1.5 rounded-md text-xs font-mono font-medium
-                  transition-all duration-150 border
-                  ${isActive
-                    ? 'bg-gray-800 border-emerald-500/50 text-white'
-                    : 'bg-gray-900/50 border-gray-800 text-gray-600 hover:text-gray-400 hover:border-gray-700'
-                  }
-                `}
-              >
-                <span>{sym.replace('USDT', '')}</span>
-                {isActive && spreadVal != null && (
-                  <span className={`ml-1.5 ${spreadVal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {spreadVal >= 0 ? '+' : ''}{spreadVal.toFixed(1)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <div className="text-xs text-gray-600 mt-1.5">
-          {filteredSymbols.length}/{allSymbols.length} selected
-        </div>
-      </section>
-
-      {/* Auto-Hedge Monitor */}
-      <AutoHedgePanel />
-
-      {/* Price Cards */}
-      {filteredSymbols.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-gray-400 uppercase mb-3">Prices & Spreads</h2>
-          <div className="grid grid-cols-1 gap-4">
-            {filteredSymbols.map((sym) => {
-              const d = data[sym];
-              const spread = d?.spread;
-              const spreadBps = spread ? (spread.exchange_spread_mid * 10000).toFixed(2) : '-';
-              const longBps = spread ? (spread.long_spread * 10000).toFixed(2) : '-';
-              const shortBps = spread ? (spread.short_spread * 10000).toFixed(2) : '-';
-              const zs = d?.zscore != null ? d.zscore.toFixed(2) : '-';
-              const baBybit = spread ? (spread.bid_ask_spread_bybit * 10000).toFixed(2) : '-';
-              const baLighter = spread ? (spread.bid_ask_spread_lighter * 10000).toFixed(2) : '-';
-              const basisBps = spread?.basis_bybit_bps != null ? spread.basis_bybit_bps.toFixed(2) : '-';
-              const netPnl = d?.net_pnl_bps;
-              const latBybit = d?.latency_bybit != null ? Math.round(d.latency_bybit) : null;
-              const latLighter = d?.latency_lighter != null ? Math.round(d.latency_lighter) : null;
-              const isPositive = spread && spread.exchange_spread_mid > 0;
+    <div className="flex-1 flex flex-col lg:flex-row min-h-0 divide-y lg:divide-y-0 lg:divide-x divide-border-subtle">
+      {/* 1. SIDEBAR (220px) */}
+      <aside className="w-full lg:w-[220px] shrink-0 bg-brand-base flex flex-col p-4 space-y-4">
+        <div>
+          <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-2.5">
+            Trading Pairs
+          </h3>
+          <div className="space-y-1">
+            {allSymbols.map((sym) => {
+              const isActive = sym === activeSymbol;
+              const symData = data[sym];
+              const symSpread = symData?.spread;
+              const symSpreadBps = symSpread ? symSpread.exchange_spread_mid * 10000 : null;
 
               return (
-                <div key={sym} className="bg-gray-900 rounded-lg border border-gray-800 p-4">
-                  {/* Header row */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${staleDot(d)}`} title="Feed freshness" />
-                      <span className="font-mono font-bold text-lg text-emerald-400">{sym}</span>
-                    </div>
-                    <div className="text-right">
-                      <span
-                        className={`font-mono text-xl font-bold ${
-                          isPositive ? 'text-green-400' : 'text-red-400'
-                        }`}
-                      >
-                        {spreadBps} <span className="text-xs text-gray-500">bps</span>
-                      </span>
-                    </div>
+                <button
+                  key={sym}
+                  onClick={() => setActiveSymbol(sym)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md font-mono text-xs transition-all duration-150 border text-left ${
+                    isActive
+                      ? 'bg-brand-panel border-accent-amber/30 text-text-primary shadow-[0_0_12px_rgba(245,166,35,0.05)] font-bold'
+                      : 'bg-transparent border-transparent text-text-secondary hover:text-text-primary hover:bg-brand-panel/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${staleDot(symData)}`} />
+                    <span>{sym.replace('USDT', '')}</span>
                   </div>
-
-                  {/* Price row */}
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Bybit Mid</div>
-                      <div className="font-mono text-base">
-                        {d?.bybit?.mid?.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        }) ?? '-'}
-                      </div>
-                      <div className="text-xs text-gray-600 font-mono">
-                        B: {d?.bybit?.bid?.toLocaleString() ?? '-'} / A: {d?.bybit?.ask?.toLocaleString() ?? '-'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Lighter Mid</div>
-                      <div className="font-mono text-base">
-                        {d?.lighter?.mid?.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        }) ?? '-'}
-                      </div>
-                      <div className="text-xs text-gray-600 font-mono">
-                        B: {d?.lighter?.bid?.toLocaleString() ?? '-'} / A: {d?.lighter?.ask?.toLocaleString() ?? '-'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Metrics row */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                    <div>
-                      <span className="text-gray-500">Long</span>
-                      <div className="font-mono text-gray-300">{longBps} bps</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Short</span>
-                      <div className="font-mono text-gray-300">{shortBps} bps</div>
-                    </div>
-                    <div className="relative group">
-                      <span className="text-gray-500">Net PnL</span>
-                      <div className={`font-mono cursor-help ${
-                        netPnl == null ? 'text-gray-500'
-                          : netPnl > 0 ? 'text-green-400'
-                          : 'text-red-400'
-                      }`}>
-                        {netPnl != null ? `${netPnl > 0 ? '+' : ''}${netPnl.toFixed(2)} bps` : '-'}
-                      </div>
-                      {/* Cost breakdown tooltip */}
-                      {spread && netPnl != null && (() => {
-                        const grossBps = Math.max(
-                          Math.abs(spread.long_spread) * 10000,
-                          Math.abs(spread.short_spread) * 10000
-                        );
-                        return (
-                          <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-10
-                            bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono
-                            whitespace-nowrap shadow-lg">
-                            <div className="text-gray-300">Gross: {grossBps.toFixed(2)} bps</div>
-                            <div className="text-red-400/70">Fees: -{(grossBps - netPnl - 1.0).toFixed(2)} bps <span className="text-gray-600">(Bybit maker)</span></div>
-                            <div className="text-red-400/70">Slip: -1.00 bps <span className="text-gray-600">(est.)</span></div>
-                            <div className="border-t border-gray-700 mt-1 pt-1">
-                              <span className={netPnl > 0 ? 'text-green-400' : 'text-red-400'}>
-                                Net: {netPnl > 0 ? '+' : ''}{netPnl.toFixed(2)} bps
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Latency</span>
-                      <div className="font-mono text-gray-300">
-                        {latBybit != null ? `B:${latBybit}` : 'B:-'}
-                        {' / '}
-                        {latLighter != null ? `L:${latLighter}` : 'L:-'}
-                        <span className="text-gray-600"> ms</span>
-                      </div>
-                    </div>
-                  </div>
-                  <ExecutionPanel symbol={sym} />
-                </div>
+                  {symSpreadBps != null && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                        isActive
+                          ? 'bg-accent-amber/10 border-accent-amber/20 text-accent-amber'
+                          : 'bg-accent-green/10 border-accent-green/20 text-accent-green'
+                      }`}
+                    >
+                      {symSpreadBps >= 0 ? '+' : ''}
+                      {symSpreadBps.toFixed(1)}
+                    </span>
+                  )}
+                </button>
               );
             })}
           </div>
-        </section>
-      )}
+        </div>
 
-      {/* Spread Charts for each visible symbol */}
-      {filteredSymbols.map((sym) => (
-        <SpreadChart key={sym} symbol={sym} />
-      ))}
-
-      {/* Funding Table — only visible symbols */}
-      {fundingData && filteredSymbols.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-gray-400 uppercase mb-3">Funding Rates</h2>
-          <div className="grid grid-cols-1 gap-3">
-            {filteredSymbols
-              .filter((sym) => fundingData[sym])
-              .map((sym) => {
-                const fd = fundingData[sym];
-                const bybitRate = fd?.bybit?.funding_rate;
-                const lighterRate = fd?.lighter?.funding_rate;
-
-                // Normalize to hourly rate for fair comparison
-                const bybitHourly = bybitRate != null ? bybitRate / 8 : null;
-                const lighterHourly = lighterRate != null ? lighterRate / 1 : null;
-
-                // 8h projected cost (what you pay/receive per 8h funding cycle)
-                const bybit8h = bybitRate;
-                const lighter8h = lighterRate != null ? lighterRate * 8 : null;
-
-                // Net funding for arb position (Long Lighter + Short Bybit)
-                // Positive = you receive, Negative = you pay
-                const netFunding8h = (bybit8h != null && lighter8h != null)
-                  ? (bybit8h - lighter8h)  // short Bybit receives when rate positive, long Lighter pays when rate positive
-                  : null;
-
-                // Next funding countdown (Bybit)
-                const nextFundingMs = fd?.bybit?.next_funding_time;
-                const countdown = nextFundingMs ? Math.max(0, nextFundingMs - Date.now()) : null;
-                const countdownMin = countdown != null ? Math.floor(countdown / 60000) : null;
-                const countdownSec = countdown != null ? Math.floor((countdown % 60000) / 1000) : null;
-
-                // Color helpers
-                const rateColor = (r: number | null) => {
-                  if (r == null) return 'text-gray-500';
-                  if (r > 0.0001) return 'text-green-400';   // positive = longs pay shorts
-                  if (r < -0.0001) return 'text-red-400';    // negative = shorts pay longs
-                  return 'text-gray-300';
-                };
-
-                return (
-                  <div key={sym} className="bg-gray-900 rounded-lg border border-gray-800 p-4">
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-semibold text-emerald-400">{sym}</span>
-                        {countdownMin != null && (
-                          <span className="text-xs font-mono text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
-                            Next: {countdownMin}m {countdownSec}s
-                          </span>
-                        )}
-                      </div>
-                      {netFunding8h != null && (
-                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
-                          netFunding8h > 0 ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'
-                        }`}>
-                          Net/8h: {netFunding8h > 0 ? '+' : ''}{(netFunding8h * 100).toFixed(4)}%
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Exchange rates side by side */}
-                    <div className="grid grid-cols-2 gap-4 mb-3">
-                      {/* Bybit */}
-                      <div className="bg-gray-800/50 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-gray-500 text-xs font-medium">Bybit</span>
-                          <span className="text-gray-600 text-xs">8h cycle</span>
-                        </div>
-                        <div className={`font-mono text-lg font-bold ${rateColor(bybitRate)}`}>
-                          {bybitRate != null ? `${(bybitRate * 100).toFixed(4)}%` : '–'}
-                        </div>
-                        <div className="grid grid-cols-2 gap-1 mt-2 text-xs font-mono">
-                          <div>
-                            <span className="text-gray-600">Hourly</span>
-                            <div className="text-gray-400">
-                              {bybitHourly != null ? `${(bybitHourly * 100).toFixed(4)}%` : '–'}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Annual</span>
-                            <div className="text-gray-400">
-                              {fd?.bybit?.annualized_rate != null
-                                ? `${(fd.bybit.annualized_rate * 100).toFixed(2)}%`
-                                : '–'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Lighter */}
-                      <div className="bg-gray-800/50 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-gray-500 text-xs font-medium">Lighter</span>
-                          <span className="text-gray-600 text-xs">1h cycle</span>
-                        </div>
-                        <div className={`font-mono text-lg font-bold ${rateColor(lighterRate)}`}>
-                          {lighterRate != null ? `${(lighterRate * 100).toFixed(4)}%` : '–'}
-                        </div>
-                        <div className="grid grid-cols-2 gap-1 mt-2 text-xs font-mono">
-                          <div>
-                            <span className="text-gray-600">Per 8h</span>
-                            <div className="text-gray-400">
-                              {lighter8h != null ? `${(lighter8h * 100).toFixed(4)}%` : '–'}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Annual</span>
-                            <div className="text-gray-400">
-                              {fd?.lighter?.annualized_rate != null
-                                ? `${(fd.lighter.annualized_rate * 100).toFixed(2)}%`
-                                : '–'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Summary bar */}
-                    {bybitRate != null && lighterRate != null && (
-                      <div className="flex items-center text-xs bg-gray-800/30 rounded px-3 py-2">
-                        <div className="font-mono">
-                          <span className="text-gray-500">Arb: </span>
-                          <span className={netFunding8h != null && netFunding8h > 0 ? 'text-green-400' : 'text-red-400'}>
-                            {netFunding8h != null && netFunding8h > 0 ? 'Favorable' : 'Costly'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+        {/* Keyboard Shortcuts Helper */}
+        <div className="hidden lg:block border-t border-border-subtle pt-4 mt-auto">
+          <h4 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-2">
+            Keys
+          </h4>
+          <div className="space-y-1.5 text-[10px] font-mono">
+            <div className="flex items-center justify-between text-text-secondary bg-brand-panel/30 px-2 py-1 rounded">
+              <span>Execute BUY</span>
+              <kbd className="bg-brand-panel border border-border-strong px-1.5 py-0.5 rounded text-text-primary font-bold">B</kbd>
+            </div>
+            <div className="flex items-center justify-between text-text-secondary bg-brand-panel/30 px-2 py-1 rounded">
+              <span>Execute SELL</span>
+              <kbd className="bg-brand-panel border border-border-strong px-1.5 py-0.5 rounded text-text-primary font-bold">S</kbd>
+            </div>
           </div>
-        </section>
-      )}
+        </div>
+      </aside>
 
-      {/* Alerts */}
-      {alertsData && Array.isArray(alertsData) && alertsData.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-gray-400 uppercase mb-3">Recent Alerts</h2>
-          <div className="space-y-1">
-            {alertsData.slice(0, 5).map((a: Alert) => (
+      {/* 2. MAIN CONTENT (Flex: 1) */}
+      <section className="flex-1 min-w-0 bg-brand-base flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6">
+        {/* Compact Auto-Hedge row */}
+        <AutoHedgePanel />
+
+        {/* Hero Spread Card */}
+        <div className="bg-brand-panel border border-border-subtle rounded-lg p-5 relative overflow-hidden flex flex-col">
+          {/* Top Amber gradient accent line */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-accent-amber to-transparent opacity-80" />
+
+          {/* Label Header row */}
+          <div className="grid grid-cols-3 text-center mb-3">
+            <div className="text-left">
+              <span className="text-[10px] font-bold text-text-dim uppercase tracking-wider">Bybit Mid</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-accent-amber uppercase tracking-wider font-mono">SPREAD (bps)</span>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-bold text-accent-cyan uppercase tracking-wider">Lighter Mid</span>
+            </div>
+          </div>
+
+          {/* Main Price display row */}
+          <div className="grid grid-cols-3 items-center text-center py-2 border-b border-border-subtle/50 pb-4 mb-4">
+            {/* Bybit Mid Price */}
+            <div className="text-left font-mono">
+              <div className="text-xl sm:text-2xl font-bold text-text-primary">
+                {bybitMid ? bybitMid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+              </div>
+              <div className="text-[10px] text-text-secondary/70 mt-1">
+                B/A: <span className="text-text-primary font-bold">{baBybit}</span> bps
+              </div>
+            </div>
+
+            {/* Pulsing Spread Mid */}
+            <div className="flex flex-col items-center justify-center">
+              {/* Force React remounting on spread update to trigger the 120ms tick animation */}
               <div
-                key={a.id ?? a.ts}
-                className={`px-3 py-2 rounded text-sm ${
-                  a.severity === 'critical'
-                    ? 'bg-red-900/30 text-red-300'
-                    : a.severity === 'warning'
-                    ? 'bg-yellow-900/30 text-yellow-300'
-                    : 'bg-gray-800 text-gray-300'
+                key={`${activeSymbol}-${spreadBps}`}
+                className="text-3xl sm:text-4xl md:text-5xl font-mono font-black text-accent-amber animate-tick drop-shadow-[0_0_16px_rgba(245,166,35,0.2)]"
+              >
+                {spreadBps}
+              </div>
+              <div className="text-[9px] text-text-dim font-bold tracking-widest mt-1">REALTIME</div>
+            </div>
+
+            {/* Lighter Mid Price */}
+            <div className="text-right font-mono">
+              <div className="text-xl sm:text-2xl font-bold text-accent-cyan">
+                {lighterMid ? lighterMid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+              </div>
+              <div className="text-[10px] text-text-secondary/70 mt-1">
+                B/A: <span className="text-accent-cyan font-bold">{baLighter}</span> bps
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom row metrics */}
+          <div className="grid grid-cols-3 text-xs font-mono">
+            <div className="text-left">
+              <span className="text-text-dim text-[10px]">Long spread</span>
+              <div className="text-accent-indigo font-bold text-sm mt-0.5">{longBps} bps</div>
+            </div>
+            <div className="text-center flex flex-col items-center">
+              <span className="text-text-dim text-[10px]">Net Arbitrage PnL</span>
+              <div
+                className={`font-black text-sm mt-0.5 ${
+                  netPnl == null ? 'text-text-dim' : netPnl > 0 ? 'text-accent-green' : 'text-accent-red'
                 }`}
               >
-                <span className="font-mono text-xs text-gray-500 mr-2">
-                  {new Date(a.ts).toLocaleTimeString()}
-                </span>
-                {a.message}
+                {netPnl != null ? `${netPnl > 0 ? '+' : ''}${netPnl.toFixed(2)} bps` : '—'}
               </div>
-            ))}
+            </div>
+            <div className="text-right">
+              <span className="text-text-dim text-[10px]">Latency (B / L)</span>
+              <div className="text-text-primary text-sm font-bold mt-0.5">
+                {latBybit ?? '—'} <span className="text-[9px] text-text-dim">ms</span> / {latLighter ?? '—'}{' '}
+                <span className="text-[9px] text-text-dim">ms</span>
+              </div>
+            </div>
           </div>
-        </section>
-      )}
-
-      {/* Empty state */}
-      {filteredSymbols.length === 0 && (
-        <div className="flex items-center justify-center h-32 text-gray-500 text-sm">
-          No symbols selected. Click on symbols above to show them.
         </div>
-      )}
+
+        {/* Execution panel */}
+        <ExecutionPanel
+          ref={executionPanelRef}
+          symbol={activeSymbol}
+          onTradeExecuted={(msg) => addToast(msg, 'success')}
+        />
+
+        {/* Spread Chart */}
+        <SpreadChart symbol={activeSymbol} />
+      </section>
+
+      {/* 3. RIGHT PANEL (300px) */}
+      <aside className="w-full lg:w-[300px] shrink-0 bg-brand-base flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6 divide-y divide-border-subtle lg:divide-y-0 lg:space-y-6">
+        {/* Health Section */}
+        <div>
+          <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-3">
+            System Connectivity
+          </h3>
+          <div className="space-y-2 font-mono text-xs">
+            <div className="flex items-center justify-between bg-brand-panel/40 border border-border-subtle rounded px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${latBybit != null ? 'bg-accent-green' : 'bg-accent-red'}`} />
+                <span className="text-text-secondary font-sans font-medium">Bybit WebSocket</span>
+              </div>
+              <span className="text-text-primary font-bold">{latBybit != null ? `${latBybit}ms` : 'FAIL'}</span>
+            </div>
+            <div className="flex items-center justify-between bg-brand-panel/40 border border-border-subtle rounded px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${latLighter != null ? 'bg-accent-green' : 'bg-accent-red'}`} />
+                <span className="text-text-secondary font-sans font-medium">Lighter Exchange API</span>
+              </div>
+              <span className="text-accent-cyan font-bold">{latLighter != null ? `${latLighter}ms` : 'FAIL'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Funding Rates Section */}
+        <div className="pt-5 lg:pt-0">
+          <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-3">
+            Funding Arb Edge
+          </h3>
+          <div className="bg-brand-panel/30 border border-border-subtle rounded-lg p-3 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-text-secondary font-sans font-medium">Countdown (Bybit)</span>
+              <span className="font-mono font-bold text-text-primary">
+                {countdownMin != null ? `${Math.floor(countdownMin / 60)}h ${countdownMin % 60}m` : '—'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+              <div className="bg-brand-panel border border-border-subtle p-2 rounded">
+                <span className="text-text-dim text-[9px] uppercase font-bold">Bybit (8h)</span>
+                <div
+                  className={`text-sm font-bold mt-0.5 ${
+                    bybitFunding != null && bybitFunding > 0 ? 'text-accent-green' : 'text-text-primary'
+                  }`}
+                >
+                  {bybitFunding != null ? `${(bybitFunding * 100).toFixed(4)}%` : '—'}
+                </div>
+              </div>
+              <div className="bg-brand-panel border border-border-subtle p-2 rounded">
+                <span className="text-text-dim text-[9px] uppercase font-bold">Lighter (1h)</span>
+                <div
+                  className={`text-sm font-bold mt-0.5 ${
+                    lighterFunding != null && lighterFunding > 0 ? 'text-accent-green' : 'text-accent-cyan'
+                  }`}
+                >
+                  {lighterFunding != null ? `${(lighterFunding * 100).toFixed(4)}%` : '—'}
+                </div>
+              </div>
+            </div>
+
+            {netFunding8h != null && (
+              <div className="flex items-center justify-between text-xs border-t border-border-subtle/50 pt-2 font-mono">
+                <span className="text-text-dim font-sans font-medium">Net Edge / 8h</span>
+                <span
+                  className={`font-black ${
+                    netFunding8h > 0 ? 'text-accent-green' : 'text-accent-red'
+                  }`}
+                >
+                  {netFunding8h > 0 ? '+' : ''}
+                  {(netFunding8h * 100).toFixed(4)}%
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Activity / Alert Log Section */}
+        <div className="pt-5 lg:pt-0 flex-1 flex flex-col min-h-[160px]">
+          <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-2.5">
+            System Operations Log
+          </h3>
+          <div className="flex-1 bg-brand-panel/20 border border-border-subtle rounded-lg p-3 font-mono text-[10px] overflow-y-auto space-y-2 max-h-[220px] lg:max-h-none">
+            {alertsData && Array.isArray(alertsData) && alertsData.length > 0 ? (
+              alertsData.slice(0, 15).map((a: Alert) => (
+                <div
+                  key={a.id ?? a.ts}
+                  className="flex items-start gap-1.5 leading-relaxed text-text-secondary border-b border-border-subtle/20 pb-1"
+                >
+                  <span className="text-text-dim font-bold shrink-0">
+                    {new Date(a.ts).toLocaleTimeString(undefined, {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: false,
+                    })}
+                  </span>
+                  <span
+                    className={`shrink-0 font-bold ${
+                      a.severity === 'critical'
+                        ? 'text-accent-red'
+                        : a.severity === 'warning'
+                        ? 'text-accent-amber'
+                        : 'text-accent-cyan'
+                    }`}
+                  >
+                    [{a.severity.toUpperCase()}]
+                  </span>
+                  <span className="text-text-primary break-all">{a.message}</span>
+                </div>
+              ))
+            ) : (
+              <div className="text-text-dim text-center py-4">LOG STREAM EMPTY</div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* Institutional Toasts bottom right */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="bg-brand-panel border border-border-strong text-text-primary px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 animate-[slide-up_180ms_ease-out_forwards] max-w-sm transition-all duration-150 hover:border-accent-amber/50"
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-accent-green animate-pulse-fast" />
+            <div className="font-mono text-xs font-semibold tracking-tight">{toast.message}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 });

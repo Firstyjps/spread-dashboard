@@ -62,40 +62,77 @@ export default function App() {
   const priceData = wsData || restData;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      {/* Nav */}
-      <nav className="border-b border-gray-800 px-3 py-2 sm:px-6 sm:py-3 flex items-center gap-3 sm:gap-6">
-        <h1 className="text-lg font-bold text-emerald-400">Spread <span className="hidden sm:inline">Dashboard</span></h1>
-        <div className="flex gap-2">
-          <NavBtn active={page === 'overview'} onClick={() => setPage('overview')}>
-            Overview
-          </NavBtn>
-          <NavBtn active={page === 'portfolio'} onClick={() => setPage('portfolio')}>
-            Portfolio
-          </NavBtn>
-          <NavBtn active={page === 'history'} onClick={() => setPage('history')}>
-            History
-          </NavBtn>
-          <NavBtn active={page === 'health'} onClick={() => setPage('health')}>
-            Health
-          </NavBtn>
+    <div className="min-h-screen bg-brand-base text-text-primary flex flex-col font-sans select-none">
+      {/* Sticky Topbar */}
+      <nav className="sticky top-0 z-40 bg-brand-base/80 backdrop-blur-md border-b border-border-subtle h-12 flex items-center px-4 justify-between">
+        <div className="flex items-center gap-6">
+          {/* Logo */}
+          <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setPage('overview')}>
+            <div className="w-2.5 h-2.5 rounded-sm bg-gradient-to-tr from-accent-amber to-accent-indigo shadow-[0_0_10px_rgba(245,166,35,0.4)]" />
+            <span className="font-mono font-bold text-xs tracking-wider text-text-primary">
+              spread<span className="text-accent-amber">.</span>dash
+            </span>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="flex h-12 items-center">
+            <NavBtn active={page === 'overview'} onClick={() => setPage('overview')}>
+              Overview
+            </NavBtn>
+            <NavBtn active={page === 'portfolio'} onClick={() => setPage('portfolio')}>
+              Portfolio
+            </NavBtn>
+            <NavBtn active={page === 'history'} onClick={() => setPage('history')}>
+              History
+            </NavBtn>
+            <NavBtn active={page === 'health'} onClick={() => setPage('health')}>
+              Health
+            </NavBtn>
+          </div>
         </div>
-        <div className="ml-auto flex items-center gap-2 text-sm">
-          <span
-            className={`inline-block w-2 h-2 rounded-full ${
-              isConnected ? 'bg-emerald-400' : 'bg-red-400'
-            }`}
-          />
-          <span className="text-gray-400">{isConnected ? 'Live' : 'Polling'}</span>
+
+        {/* Live status dot */}
+        <div className="flex items-center gap-2 text-xs font-mono bg-brand-panel/40 border border-border-subtle px-2 py-0.5 rounded-md">
+          <span className="relative flex h-1.5 w-1.5">
+            {isConnected && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75"></span>
+            )}
+            <span
+              className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
+                isConnected ? 'bg-accent-green' : 'bg-accent-red animate-pulse-slow'
+              }`}
+            />
+          </span>
+          <span className="text-text-secondary font-mono tracking-tight text-[10px]">
+            {isConnected ? 'LIVE FEED' : 'REST POLLING'}
+          </span>
         </div>
       </nav>
 
-      {/* Content */}
-      <main className="p-3 sm:p-6">
+      {/* Content wrapper */}
+      <main className="flex-1 flex flex-col min-h-0">
         {page === 'overview' && <OverviewPage data={priceData} />}
-        {page === 'portfolio' && <Suspense fallback={<PageFallback />}><PortfolioPage /></Suspense>}
-        {page === 'history' && <Suspense fallback={<PageFallback />}><HistoryPage /></Suspense>}
-        {page === 'health' && <Suspense fallback={<PageFallback />}><HealthPage /></Suspense>}
+        {page === 'portfolio' && (
+          <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
+            <Suspense fallback={<PageFallback />}>
+              <PortfolioPage />
+            </Suspense>
+          </div>
+        )}
+        {page === 'history' && (
+          <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
+            <Suspense fallback={<PageFallback />}>
+              <HistoryPage />
+            </Suspense>
+          </div>
+        )}
+        {page === 'health' && (
+          <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
+            <Suspense fallback={<PageFallback />}>
+              <HealthPage />
+            </Suspense>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -113,8 +150,10 @@ function NavBtn({
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1 rounded text-sm transition ${
-        active ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+      className={`px-3 h-12 text-xs font-medium border-b-2 transition-colors duration-150 ${
+        active
+          ? 'border-accent-amber text-text-primary'
+          : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-strong'
       }`}
     >
       {children}
