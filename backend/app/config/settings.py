@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Hyperliquid
     hyperliquid_info_url: str = "https://api.hyperliquid.xyz/info"
 
+    # OKX Market Data
+    okx_base_url: str = "https://www.okx.com"
+
     # Database
     db_path: str = "./data/spread_dashboard.db"
 
