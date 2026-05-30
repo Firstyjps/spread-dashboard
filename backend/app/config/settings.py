@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Aster Futures
     aster_futures_base_url: str = "https://fapi.asterdex.com"
 
+    # Hyperliquid
+    hyperliquid_info_url: str = "https://api.hyperliquid.xyz/info"
+
     # Database
     db_path: str = "./data/spread_dashboard.db"
 
