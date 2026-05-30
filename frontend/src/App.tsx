@@ -15,6 +15,7 @@ const HealthPage = lazy(() => import('./components/health/HealthPage').then(m =>
 const PortfolioPage = lazy(() => import('./components/portfolio/PortfolioPage').then(m => ({ default: m.PortfolioPage })));
 const TradesPage = lazy(() => import('./components/trades/TradesPage').then(m => ({ default: m.TradesPage })));
 const HistoryPage = lazy(() => import('./components/history/HistoryPage').then(m => ({ default: m.HistoryPage })));
+const SettingsPage = lazy(() => import('./components/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center py-20 text-gray-500 text-sm">Loading…</div>
@@ -132,7 +133,9 @@ export default function App() {
         {page === 'settings' && (
           <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
             <ErrorBoundary resetKey={page}>
-              <div className="text-sm text-fg3">Settings Page placeholder</div>
+              <Suspense fallback={<PageFallback />}>
+                <SettingsPage />
+              </Suspense>
             </ErrorBoundary>
           </div>
         )}
