@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # GRVT Market Data
     grvt_market_data_base_url: str = "https://market-data.grvt.io"
 
+    # Aster Futures
+    aster_futures_base_url: str = "https://fapi.asterdex.com"
+
     # Database
     db_path: str = "./data/spread_dashboard.db"
 
