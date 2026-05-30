@@ -6,6 +6,9 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { OverviewPage } from './components/overview/OverviewPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { StalenessIndicator } from './components/common/StalenessIndicator';
+import { useAuth } from './components/auth/AuthContext';
+import { LoginPage } from './components/auth/LoginPage';
+import { AppShell } from './components/chrome/AppShell';
 
 const HealthPage = lazy(() => import('./components/health/HealthPage').then(m => ({ default: m.HealthPage })));
 const PortfolioPage = lazy(() => import('./components/portfolio/PortfolioPage').then(m => ({ default: m.PortfolioPage })));
@@ -22,6 +25,7 @@ type Page = 'overview' | 'portfolio' | 'trades' | 'history' | 'health' | 'settin
 const WS_FLUSH_INTERVAL_MS = 250;
 
 export default function App() {
+  const { isAuthenticated } = useAuth();
   const [page, setPage] = useState<Page>('overview');
   const [wsData, setWsData] = useState<any>(null);
   const [lastUpdateTs, setLastUpdateTs] = useState<number | null>(null);
@@ -68,63 +72,21 @@ export default function App() {
 
   const priceData = wsData || restData;
 
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
   return (
-    <div className="min-h-screen bg-brand-base text-text-primary flex flex-col font-sans select-none">
-      {/* Sticky Topbar */}
-      <nav className="sticky top-0 z-40 bg-brand-base/80 backdrop-blur-md border-b border-border-subtle h-11 sm:h-12 flex items-center px-2 sm:px-4 justify-between overflow-hidden">
-        <div className="flex min-w-0 flex-1 items-center justify-center sm:flex-none sm:justify-start sm:gap-6">
-          {/* Logo */}
-          <div className="hidden sm:flex shrink-0 items-center gap-1.5 cursor-pointer" onClick={() => setPage('overview')}>
-            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm bg-gradient-to-tr from-accent-amber to-accent-indigo shadow-[0_0_10px_rgba(245,166,35,0.4)]" />
-            <span className="font-mono font-bold text-[11px] sm:text-xs tracking-wider text-text-primary">
-              spread<span className="text-accent-amber">.</span>dash
-            </span>
-          </div>
+    <div className="font-sans select-none bg-background text-foreground">
+      <AppShell 
+        currentPage={page} 
+        onPageChange={(p) => setPage(p)} 
+        wsLatencyMs={isConnected ? (Date.now() - (lastUpdateTs || Date.now())) : null}
+      >
+        <StalenessIndicator lastUpdateTs={lastUpdateTs} variant="banner" />
 
-          {/* Navigation Tabs */}
-          <div className="grid h-11 w-full min-w-0 grid-cols-4 items-center sm:flex sm:h-12 sm:w-auto sm:justify-start">
-            <NavBtn active={page === 'overview'} onClick={() => setPage('overview')}>
-              Overview
-            </NavBtn>
-            <NavBtn active={page === 'portfolio'} onClick={() => setPage('portfolio')}>
-              Portfolio
-            </NavBtn>
-            <NavBtn active={page === 'trades'} onClick={() => setPage('trades')}>
-              Trades
-            </NavBtn>
-            <NavBtn active={page === 'history'} onClick={() => setPage('history')}>
-              History
-            </NavBtn>
-            <div className="hidden sm:block">
-              <NavBtn active={page === 'health'} onClick={() => setPage('health')}>
-                Health
-              </NavBtn>
-            </div>
-          </div>
-        </div>
-
-        {/* Live status dot */}
-        <div className="hidden sm:flex items-center gap-2 text-xs font-mono bg-brand-panel/40 border border-border-subtle px-2 py-0.5 rounded-md">
-          <span className="relative flex h-1.5 w-1.5">
-            {isConnected && (
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75"></span>
-            )}
-            <span
-              className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
-                isConnected ? 'bg-accent-green' : 'bg-accent-red animate-pulse-slow'
-              }`}
-            />
-          </span>
-          <span className="text-text-secondary font-mono tracking-tight text-[10px]">
-            {isConnected ? 'LIVE FEED' : 'REST POLLING'}
-          </span>
-          <StalenessIndicator lastUpdateTs={lastUpdateTs} />
-        </div>
-      </nav>
-      <StalenessIndicator lastUpdateTs={lastUpdateTs} variant="banner" />
-
-      {/* Content wrapper */}
-      <main className="flex-1 flex flex-col min-h-0">
+        {/* Content wrapper */}
+        <div className="flex-1 flex flex-col min-h-0">
         {page === 'overview' && (
           <ErrorBoundary resetKey={page}>
             <OverviewPage data={priceData} />
@@ -166,30 +128,15 @@ export default function App() {
             </ErrorBoundary>
           </div>
         )}
-      </main>
+        {page === 'settings' && (
+          <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
+            <ErrorBoundary resetKey={page}>
+              <div className="text-sm text-fg3">Settings Page placeholder</div>
+            </ErrorBoundary>
+          </div>
+        )}
+        </div>
+      </AppShell>
     </div>
-  );
-}
-
-function NavBtn({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex h-11 w-full items-center justify-center px-0.5 text-[11px] font-semibold border-b-2 transition-colors duration-150 whitespace-nowrap sm:h-12 sm:w-auto sm:px-3 sm:text-xs sm:font-medium ${
-        active
-          ? 'border-accent-amber text-text-primary'
-          : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-strong'
-      }`}
-    >
-      {children}
-    </button>
   );
 }

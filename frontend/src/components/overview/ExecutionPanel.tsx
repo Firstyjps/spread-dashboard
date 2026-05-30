@@ -236,13 +236,13 @@ export const ExecutionPanel = React.memo(
         : null;
 
     return (
-      <div className="bg-brand-panel border border-border-subtle rounded-lg p-4 space-y-4 flex flex-col min-h-0">
+      <div className="bg-card border border-bd1 rounded-lg p-4 space-y-4 flex flex-col min-h-0">
         {/* Panel Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider">Execution Desk</h3>
+            <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider">Execution Desk</h3>
             {entryBps != null && (
-              <span className="bg-accent-cyan/10 border border-accent-cyan/20 text-accent-cyan px-1.5 py-0.5 rounded text-[9px] font-mono font-bold">
+              <span className="bg-info/10 border border-info/20 text-info px-1.5 py-0.5 rounded text-[9px] font-mono font-bold">
                 ENTRY SPREAD: {entryBps >= 0 ? '+' : ''}
                 {entryBps.toFixed(2)} bps
               </span>
@@ -250,7 +250,7 @@ export const ExecutionPanel = React.memo(
           </div>
           {hasPosition && (
             <span
-              className={`font-mono text-xs font-black ${netPnl >= 0 ? 'text-accent-green' : 'text-accent-red'}`}
+              className={`font-mono text-xs font-black ${netPnl >= 0 ? 'text-long' : 'text-short'}`}
             >
               NET PNL: {formatPnl(netPnl)}
             </span>
@@ -263,7 +263,7 @@ export const ExecutionPanel = React.memo(
           <PositionCard exchange="Lighter" pos={lighterPos} />
         </div>
 
-        {posError && <p className="text-[10px] font-mono text-accent-red">{posError}</p>}
+        {posError && <p className="text-[10px] font-mono text-short">{posError}</p>}
 
         {/* Inline SL/TP range tracking bar */}
         {hasPosition && (() => {
@@ -277,25 +277,25 @@ export const ExecutionPanel = React.memo(
             <div
               className={`border rounded-lg px-3 py-2 ${
                 triggered
-                  ? 'border-accent-amber/40 bg-accent-amber/5'
-                  : 'border-border-subtle bg-brand-panel/40'
+                  ? 'border-warn/40 bg-warn/5'
+                  : 'border-bd1 bg-card/40'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-text-secondary uppercase font-bold font-mono">Arb TP / SL Protect</span>
+                <span className="text-[10px] text-fg2 uppercase font-bold font-mono">Arb TP / SL Protect</span>
                 <div className="flex items-center gap-2">
                   {triggered ? (
-                    <span className="text-[10px] font-mono font-black text-accent-amber animate-pulse-fast">
+                    <span className="text-[10px] font-mono font-black text-warn animate-pulse-fast">
                       {slTpStatus.trigger_type} TRIGGERED
                     </span>
                   ) : running ? (
-                    <span className="text-[10px] font-mono font-bold text-text-primary">
-                      <span className="text-accent-green">{tpPrice != null ? formatNum(tpPrice, 1) : '–'}</span>
-                      <span className="text-text-dim px-1">/</span>
-                      <span className="text-accent-red">{slPrice != null ? formatNum(slPrice, 1) : '–'}</span>
+                    <span className="text-[10px] font-mono font-bold text-fg1">
+                      <span className="text-long">{tpPrice != null ? formatNum(tpPrice, 1) : '–'}</span>
+                      <span className="text-fg3 px-1">/</span>
+                      <span className="text-short">{slPrice != null ? formatNum(slPrice, 1) : '–'}</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono text-text-dim">PROTECTION INACTIVE</span>
+                    <span className="text-[10px] font-mono text-fg3">PROTECTION INACTIVE</span>
                   )}
 
                   {/* Edit / Dismiss */}
@@ -308,7 +308,7 @@ export const ExecutionPanel = React.memo(
                         } catch {}
                         await fetchSlTp();
                       }}
-                      className="text-text-secondary hover:text-text-primary p-0.5"
+                      className="text-fg2 hover:text-fg1 p-0.5"
                       title="Dismiss alert"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -319,7 +319,7 @@ export const ExecutionPanel = React.memo(
                     <button
                       onClick={handleSlTpCancel}
                       disabled={slTpLoading}
-                      className="text-accent-red hover:text-red-400 p-0.5"
+                      className="text-short hover:text-red-400 p-0.5"
                       title="Cancel protection"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -329,7 +329,7 @@ export const ExecutionPanel = React.memo(
                   ) : (
                     <button
                       onClick={() => setSlTpEditing(!slTpEditing)}
-                      className="text-text-secondary hover:text-text-primary p-0.5"
+                      className="text-fg2 hover:text-fg1 p-0.5"
                       title="Set protection rules"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -344,25 +344,25 @@ export const ExecutionPanel = React.memo(
               {slTpEditing && !running && !triggered && (
                 <div className="mt-2 flex items-center gap-2 font-mono">
                   <div className="flex-1">
-                    <label className="text-[9px] text-accent-green font-bold uppercase">TP Target (+$)</label>
+                    <label className="text-[9px] text-long font-bold uppercase">TP Target (+$)</label>
                     <input
                       type="number"
                       value={tpInput}
                       onChange={(e) => setTpInput(e.target.value)}
                       step="10"
                       min="0"
-                      className="w-full bg-brand-base border border-border-strong rounded px-2.5 py-1 text-xs text-text-primary font-bold focus:border-accent-green focus:outline-none"
+                      className="w-full bg-bg1 border border-bd2 rounded px-2.5 py-1 text-xs text-fg1 font-bold focus:border-long focus:outline-none"
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="text-[9px] text-accent-red font-bold uppercase">SL Boundary (-$)</label>
+                    <label className="text-[9px] text-short font-bold uppercase">SL Boundary (-$)</label>
                     <input
                       type="number"
                       value={slInput}
                       onChange={(e) => setSlInput(e.target.value)}
                       step="10"
                       min="0"
-                      className="w-full bg-brand-base border border-border-strong rounded px-2.5 py-1 text-xs text-text-primary font-bold focus:border-accent-red focus:outline-none"
+                      className="w-full bg-bg1 border border-bd2 rounded px-2.5 py-1 text-xs text-fg1 font-bold focus:border-short focus:outline-none"
                     />
                   </div>
                   <button
@@ -378,8 +378,8 @@ export const ExecutionPanel = React.memo(
               {/* Protection progress bar */}
               {running && entryP != null && slTpStatus?.last_mark_price != null && (
                 <div className="mt-1.5 flex items-center gap-2 text-[9px] font-mono font-bold">
-                  <span className="text-accent-red">{slPrice != null ? formatNum(slPrice, 0) : ''}</span>
-                  <div className="flex-1 h-1 bg-border-strong rounded-full relative overflow-hidden">
+                  <span className="text-short">{slPrice != null ? formatNum(slPrice, 0) : ''}</span>
+                  <div className="flex-1 h-1 bg-bd2 rounded-full relative overflow-hidden">
                     {(() => {
                       const range = (slTpStatus.sl_delta || 500) + (slTpStatus.tp_delta || 500);
                       const dev = slTpStatus.last_mark_price - entryP;
@@ -388,14 +388,14 @@ export const ExecutionPanel = React.memo(
                       return (
                         <div
                           className={`absolute top-0 h-full w-1 rounded-full ${
-                            dev >= 0 ? 'bg-accent-green' : 'bg-accent-red'
+                            dev >= 0 ? 'bg-long' : 'bg-short'
                           }`}
                           style={{ left: `${clamped}%`, transform: 'translateX(-50%)' }}
                         />
                       );
                     })()}
                   </div>
-                  <span className="text-accent-green">{tpPrice != null ? formatNum(tpPrice, 0) : ''}</span>
+                  <span className="text-long">{tpPrice != null ? formatNum(tpPrice, 0) : ''}</span>
                 </div>
               )}
             </div>
@@ -403,25 +403,25 @@ export const ExecutionPanel = React.memo(
         })()}
 
         {/* Order inputs and actions */}
-        <div className="border-t border-border-subtle/50 pt-3 space-y-3">
+        <div className="border-t border-bd1/50 pt-3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-text-dim uppercase tracking-wider">New Arbitrage Order</span>
-            <span className="text-[10px] font-mono text-text-dim font-bold">MARKET EXECUTIVE</span>
+            <span className="text-[10px] font-bold text-fg3 uppercase tracking-wider">New Arbitrage Order</span>
+            <span className="text-[10px] font-mono text-fg3 font-bold">MARKET EXECUTIVE</span>
           </div>
 
           <div className="flex items-stretch gap-2.5">
             {/* Input field */}
-            <div className="flex-1 flex items-center bg-brand-base border border-border-strong rounded-md px-3 focus-within:border-accent-amber transition-colors">
+            <div className="flex-1 flex items-center bg-bg1 border border-bd2 rounded-md px-3 focus-within:border-warn transition-colors">
               <input
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 step="1"
                 min="0"
-                className="w-full bg-transparent border-0 outline-none text-text-primary text-sm font-mono font-bold py-2 focus:ring-0"
+                className="w-full bg-transparent border-0 outline-none text-fg1 text-sm font-mono font-bold py-2 focus:ring-0"
                 placeholder="0.00"
               />
-              <span className="text-xs font-mono font-bold text-text-dim shrink-0 uppercase select-none">
+              <span className="text-xs font-mono font-bold text-fg3 shrink-0 uppercase select-none">
                 {symbol.replace('USDT', '').replace('XAUT', 'XAU')}
               </span>
             </div>
@@ -437,12 +437,12 @@ export const ExecutionPanel = React.memo(
                     onClick={() => setAmount(String(q))}
                     className={`px-3.5 rounded-md font-mono text-xs font-bold border transition-colors select-none ${
                       isSelected
-                        ? 'bg-accent-amber/15 border-accent-amber/50 text-accent-amber'
-                        : 'bg-brand-base border-border-strong text-text-secondary hover:text-text-primary hover:border-border-strong'
+                        ? 'bg-warn/15 border-warn/50 text-warn'
+                        : 'bg-bg1 border-bd2 text-fg2 hover:text-fg1 hover:border-bd2'
                     }`}
                   >
                     {q}
-                    {isDefault && <span className="text-[9px] text-accent-amber ml-0.5">★</span>}
+                    {isDefault && <span className="text-[9px] text-warn ml-0.5">★</span>}
                   </button>
                 );
               })}
@@ -455,11 +455,11 @@ export const ExecutionPanel = React.memo(
               <button
                 onClick={() => handleExecute('LONG_LIGHTER')}
                 disabled={loading}
-                className="w-full bg-accent-green/10 border border-accent-green/30 text-accent-green py-2.5 rounded-md font-bold text-xs btn-glow-green select-none disabled:opacity-50"
+                className="w-full bg-long/10 border border-long/30 text-long py-2.5 rounded-md font-bold text-xs btn-glow-green select-none disabled:opacity-50"
               >
                 {loading ? 'EXECUTING...' : 'BUY L / SELL B'}
               </button>
-              <div className="text-[9px] text-text-dim font-bold font-mono tracking-wide text-center mt-1">
+              <div className="text-[9px] text-fg3 font-bold font-mono tracking-wide text-center mt-1">
                 LONG LIGHTER · SHORT BYBIT
               </div>
             </div>
@@ -467,11 +467,11 @@ export const ExecutionPanel = React.memo(
               <button
                 onClick={() => handleExecute('SHORT_LIGHTER')}
                 disabled={loading}
-                className="w-full bg-accent-red/10 border border-accent-red/30 text-accent-red py-2.5 rounded-md font-bold text-xs btn-glow-red select-none disabled:opacity-50"
+                className="w-full bg-short/10 border border-short/30 text-short py-2.5 rounded-md font-bold text-xs btn-glow-red select-none disabled:opacity-50"
               >
                 {loading ? 'EXECUTING...' : 'SELL L / BUY B'}
               </button>
-              <div className="text-[9px] text-text-dim font-bold font-mono tracking-wide text-center mt-1">
+              <div className="text-[9px] text-fg3 font-bold font-mono tracking-wide text-center mt-1">
                 SHORT LIGHTER · LONG BYBIT
               </div>
             </div>
@@ -482,7 +482,7 @@ export const ExecutionPanel = React.memo(
             <button
               onClick={handleCloseAll}
               disabled={loading}
-              className="w-full bg-accent-amber/10 hover:bg-accent-amber/20 border border-accent-amber/30 text-accent-amber py-2 rounded-md font-mono font-bold text-xs select-none tracking-wider transition-colors disabled:opacity-50"
+              className="w-full bg-warn/10 hover:bg-warn/20 border border-warn/30 text-warn py-2 rounded-md font-mono font-bold text-xs select-none tracking-wider transition-colors disabled:opacity-50"
             >
               {loading ? 'CLOSING...' : '🚨 EMERGENCY CLOSE ALL SPREADS'}
             </button>
@@ -491,15 +491,15 @@ export const ExecutionPanel = React.memo(
 
         {/* Trade Log */}
         {tradeLog.length > 0 && (
-          <div className="border-t border-border-subtle/50 pt-3">
+          <div className="border-t border-bd1/50 pt-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold text-text-dim uppercase tracking-wider">Local Executions Log</span>
+              <span className="text-[10px] font-bold text-fg3 uppercase tracking-wider">Local Executions Log</span>
               <button
                 onClick={() => {
                   setTradeLog([]);
                   saveTradeLog([]);
                 }}
-                className="text-[9px] font-mono text-text-dim hover:text-text-secondary"
+                className="text-[9px] font-mono text-fg3 hover:text-fg2"
               >
                 Clear Log
               </button>
@@ -508,16 +508,16 @@ export const ExecutionPanel = React.memo(
               {tradeLog.slice(0, 10).map((log, index) => (
                 <div
                   key={`${log.ts}-${index}`}
-                  className="flex items-center justify-between border-b border-border-subtle/20 pb-0.5 text-text-secondary"
+                  className="flex items-center justify-between border-b border-bd1/20 pb-0.5 text-fg2"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-text-dim">
+                    <span className="text-fg3">
                       {new Date(log.ts).toLocaleTimeString(undefined, { hour12: false })}
                     </span>
-                    <span className="text-text-primary font-bold">{log.action}</span>
-                    <span className="text-text-secondary font-semibold">{log.amount} XAU</span>
+                    <span className="text-fg1 font-bold">{log.action}</span>
+                    <span className="text-fg2 font-semibold">{log.amount} XAU</span>
                   </div>
-                  <span className={log.status === 'success' ? 'text-accent-green' : 'text-accent-red'}>
+                  <span className={log.status === 'success' ? 'text-long' : 'text-short'}>
                     {log.status === 'success' ? 'OK' : 'FAIL'}
                   </span>
                 </div>
@@ -543,18 +543,18 @@ const PositionCard = React.memo(function PositionCard({
     <div
       className={`rounded-lg p-3 border transition-colors duration-150 ${
         hasPos
-          ? 'bg-brand-panel border-border-strong shadow-[0_0_12px_rgba(255,255,255,0.02)]'
-          : 'bg-brand-panel/30 border-border-subtle opacity-50'
+          ? 'bg-card border-bd2 shadow-[0_0_12px_rgba(255,255,255,0.02)]'
+          : 'bg-card/30 border-bd1 opacity-50'
       }`}
     >
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-bold text-text-secondary uppercase">{exchange}</span>
+        <span className="text-[10px] font-bold text-fg2 uppercase">{exchange}</span>
         {hasPos && (
           <span
             className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
               pos.is_long
-                ? 'bg-accent-green/10 text-accent-green border border-accent-green/20'
-                : 'bg-accent-red/10 text-accent-red border border-accent-red/20'
+                ? 'bg-long/10 text-long border border-long/20'
+                : 'bg-short/10 text-short border border-short/20'
             }`}
           >
             {pos.is_long ? 'LONG' : 'SHORT'}
@@ -565,24 +565,24 @@ const PositionCard = React.memo(function PositionCard({
       {hasPos ? (
         <div className="space-y-1 text-xs font-mono">
           <div className="flex justify-between">
-            <span className="text-text-dim text-[10px]">Position Size</span>
-            <span className="text-text-primary font-bold font-mono">
-              {formatNum(pos.amount, 4)} <span className="text-[10px] text-text-dim font-normal">XAU</span>
+            <span className="text-fg3 text-[10px]">Position Size</span>
+            <span className="text-fg1 font-bold font-mono">
+              {formatNum(pos.amount, 4)} <span className="text-[10px] text-fg3 font-normal">XAU</span>
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-text-dim text-[10px]">Entry Price</span>
-            <span className="text-text-secondary">{formatNum(pos.entry_price, 2)}</span>
+            <span className="text-fg3 text-[10px]">Entry Price</span>
+            <span className="text-fg2">{formatNum(pos.entry_price, 2)}</span>
           </div>
-          <div className="flex justify-between border-t border-border-subtle/50 pt-1 mt-1">
-            <span className="text-text-dim text-[10px]">Unrealized PnL</span>
-            <span className={`font-black ${pos.pnl >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+          <div className="flex justify-between border-t border-bd1/50 pt-1 mt-1">
+            <span className="text-fg3 text-[10px]">Unrealized PnL</span>
+            <span className={`font-black ${pos.pnl >= 0 ? 'text-long' : 'text-short'}`}>
               {formatPnl(pos.pnl)}
             </span>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-3 text-text-dim font-mono">
+        <div className="flex flex-col items-center justify-center py-3 text-fg3 font-mono">
           <span className="text-[10px] font-bold tracking-wider uppercase">No Position</span>
           <span className="text-[9px] mt-0.5">0.0000 XAU</span>
         </div>

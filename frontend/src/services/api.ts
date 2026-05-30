@@ -21,10 +21,7 @@ export function setApiKey(key: string): void {
 }
 
 function promptForKey(): string {
-  if (typeof window === 'undefined') return '';
-  const k = window.prompt('Enter API key (X-API-Key) — saved in localStorage') || '';
-  if (k) setApiKey(k);
-  return k;
+  return '';
 }
 
 function authHeaders(): Record<string, string> {
@@ -37,9 +34,6 @@ async function fetchJSON<T>(path: string, withAuth = false): Promise<T> {
     signal: withTimeout(FETCH_TIMEOUT_MS),
     headers: withAuth ? authHeaders() : {},
   });
-  if (res.status === 401 && withAuth) {
-    if (promptForKey()) return fetchJSON<T>(path, true);
-  }
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -58,10 +52,6 @@ async function postJSON<T>(path: string, body: unknown, timeoutMs = FETCH_TIMEOU
       throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s — backend may still be processing`);
     }
     throw err;
-  }
-  if (res.status === 401) {
-    if (promptForKey()) return postJSON<T>(path, body, timeoutMs);
-    throw new Error('Unauthorized: missing or invalid X-API-Key');
   }
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

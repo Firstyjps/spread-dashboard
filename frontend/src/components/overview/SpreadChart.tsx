@@ -128,13 +128,13 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
   return (
     <div className="space-y-3.5">
       {/* Header and timeframe control */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border-subtle/50 pb-2">
-        <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-bd1/50 pb-2">
+        <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider">
           Market Spreads History (bps)
         </h3>
         <div className="flex items-center gap-2">
           {/* Timeframe selector */}
-          <div className="flex bg-brand-panel border border-border-subtle rounded-md p-0.5 gap-0.5">
+          <div className="flex bg-card border border-bd1 rounded-md p-0.5 gap-0.5">
             {TIME_RANGES.map((range) => {
               const isActive = selectedRange.label === range.label;
               return (
@@ -143,12 +143,12 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                   onClick={() => setSelectedRange(range)}
                   className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-colors select-none ${
                     isActive
-                      ? 'bg-accent-amber/15 border border-accent-amber/30 text-accent-amber'
-                      : 'border border-transparent text-text-secondary hover:text-text-primary hover:bg-brand-base/30'
+                      ? 'bg-warn/15 border border-warn/30 text-warn'
+                      : 'border border-transparent text-fg2 hover:text-fg1 hover:bg-bg1/30'
                   }`}
                 >
                   {range.label}
-                  {range.isDefault && <span className="text-[9px] text-accent-amber ml-0.5">★</span>}
+                  {range.isDefault && <span className="text-[9px] text-warn ml-0.5">★</span>}
                 </button>
               );
             })}
@@ -157,7 +157,7 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
           {/* CSV export */}
           <button
             onClick={handleExportCsv}
-            className="px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-accent-cyan/10 border border-accent-cyan/30 text-accent-cyan btn-glow-cyan flex items-center gap-1 select-none"
+            className="px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-info/10 border border-info/30 text-info btn-glow-cyan flex items-center gap-1 select-none"
             title="Download spreads history as CSV"
           >
             <svg
@@ -177,30 +177,30 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
 
       {/* Percentiles indicators */}
       {showPercentiles && (
-        <div className="flex items-center gap-3 text-[10px] font-mono font-bold text-text-secondary bg-brand-panel/30 border border-border-subtle/50 px-3 py-1.5 rounded-md flex-wrap">
+        <div className="flex items-center gap-3 text-[10px] font-mono font-bold text-fg2 bg-card/30 border border-bd1/50 px-3 py-1.5 rounded-md flex-wrap">
           <div className="flex items-center gap-1">
-            <span className="text-text-dim uppercase">P10:</span>
+            <span className="text-fg3 uppercase">P10:</span>
             <span className="text-accent-indigo">{p10Bps} bps</span>
           </div>
-          <span className="text-border-strong">|</span>
+          <span className="text-bd2">|</span>
           <div className="flex items-center gap-1">
-            <span className="text-text-dim uppercase">Mean:</span>
-            <span className="text-accent-amber">{meanBps} bps</span>
+            <span className="text-fg3 uppercase">Mean:</span>
+            <span className="text-warn">{meanBps} bps</span>
           </div>
-          <span className="text-border-strong">|</span>
+          <span className="text-bd2">|</span>
           <div className="flex items-center gap-1">
-            <span className="text-text-dim uppercase">P90:</span>
-            <span className="text-accent-cyan">{p90Bps} bps</span>
+            <span className="text-fg3 uppercase">P90:</span>
+            <span className="text-info">{p90Bps} bps</span>
           </div>
-          <span className="text-border-strong">|</span>
-          <div className="text-text-dim text-[9px] ml-auto">{stats!.n} SAMPLES RECORDED</div>
+          <span className="text-bd2">|</span>
+          <div className="text-fg3 text-[9px] ml-auto">{stats!.n} SAMPLES RECORDED</div>
         </div>
       )}
 
       {/* Chart Canvas */}
-      <div className="h-56 sm:h-64 bg-brand-panel border border-border-subtle rounded-lg p-3">
+      <div className="h-56 sm:h-64 bg-card border border-bd1 rounded-lg p-3">
         {chartData.length < 2 ? (
-          <div className="h-full flex items-center justify-center text-text-dim font-mono text-xs">
+          <div className="h-full flex items-center justify-center text-fg3 font-mono text-xs">
             {isLoading ? 'LOADING CHART DATA...' : `ACCUMULATING TICK STREAM (${chartData.length} pts)`}
           </div>
         ) : (
@@ -316,7 +316,7 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                 )}
               </LineChart>
             </ResponsiveContainer>
-            <div className="absolute top-1 right-2 text-[9px] font-mono text-text-dim select-none">
+            <div className="absolute top-1 right-2 text-[9px] font-mono text-fg3 select-none">
               {count} POINTS DOWNSAMPLED
             </div>
           </div>

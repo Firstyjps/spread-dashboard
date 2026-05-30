@@ -139,13 +139,13 @@ export const HistoryPage = React.memo(function HistoryPage() {
         </div>
       )}
 
-      <div className="h-[70vh] bg-brand-panel rounded-lg border border-border-subtle p-3">
+      <div className="h-[70vh] bg-card rounded-lg border border-bd1 p-3">
         {isLoading ? (
-          <div className="h-full flex items-center justify-center text-text-dim font-mono text-sm">
+          <div className="h-full flex items-center justify-center text-fg3 font-mono text-sm">
             LOADING HISTORICAL DATA...
           </div>
         ) : chartData.length < 2 ? (
-          <div className="h-full flex items-center justify-center text-text-dim font-mono text-sm">
+          <div className="h-full flex items-center justify-center text-fg3 font-mono text-sm">
             NO HISTORICAL DATA AVAILABLE ({chartData.length} points)
           </div>
         ) : (

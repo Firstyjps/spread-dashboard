@@ -24,7 +24,7 @@ export function StalenessIndicator({ lastUpdateTs, variant = 'compact' }: Stalen
   if (variant === 'banner') {
     if (!isCritical) return null;
     return (
-      <div className="border-b border-accent-red/40 bg-accent-red/10 px-4 py-2 text-center text-xs font-semibold text-accent-red">
+      <div className="border-b border-short/40 bg-short/10 px-4 py-2 text-center text-xs font-semibold text-short">
         Feed stale for {ageS}s. Executions may be blocked by the circuit breaker.
       </div>
     );
@@ -38,8 +38,8 @@ export function StalenessIndicator({ lastUpdateTs, variant = 'compact' }: Stalen
 
   return (
     <span
-      className={`inline-flex items-center gap-1 border-l border-border-subtle pl-2 ${
-        isStale ? 'text-accent-red' : 'text-text-dim'
+      className={`inline-flex items-center gap-1 border-l border-bd1 pl-2 ${
+        isStale ? 'text-short' : 'text-fg3'
       }`}
     >
       {label}

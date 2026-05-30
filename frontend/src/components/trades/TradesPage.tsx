@@ -21,9 +21,9 @@ function fmtTime(ts: number) {
 }
 
 function statusClass(status: string) {
-  if (status === 'success') return 'border-accent-green/30 bg-accent-green/10 text-accent-green';
-  if (status === 'partial' || status === 'reversed') return 'border-accent-amber/30 bg-accent-amber/10 text-accent-amber';
-  return 'border-accent-red/30 bg-accent-red/10 text-accent-red';
+  if (status === 'success') return 'border-long/30 bg-long/10 text-long';
+  if (status === 'partial' || status === 'reversed') return 'border-warn/30 bg-warn/10 text-warn';
+  return 'border-short/30 bg-short/10 text-short';
 }
 
 export const TradesPage = React.memo(function TradesPage() {
@@ -52,7 +52,7 @@ export const TradesPage = React.memo(function TradesPage() {
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold uppercase text-gray-400">Trade Journal</h2>
-          <p className="mt-1 text-xs text-text-dim">{trades.length} recent executions</p>
+          <p className="mt-1 text-xs text-fg3">{trades.length} recent executions</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -61,8 +61,8 @@ export const TradesPage = React.memo(function TradesPage() {
             onClick={() => setSymbol('')}
             className={`h-8 rounded-md border px-3 text-xs font-semibold ${
               symbol === ''
-                ? 'border-accent-amber text-text-primary'
-                : 'border-border-subtle text-text-secondary hover:text-text-primary'
+                ? 'border-warn text-fg1'
+                : 'border-bd1 text-fg2 hover:text-fg1'
             }`}
           >
             All
@@ -74,8 +74,8 @@ export const TradesPage = React.memo(function TradesPage() {
               onClick={() => setSymbol(s)}
               className={`h-8 rounded-md border px-3 text-xs font-semibold ${
                 symbol === s
-                  ? 'border-accent-amber text-text-primary'
-                  : 'border-border-subtle text-text-secondary hover:text-text-primary'
+                  ? 'border-warn text-fg1'
+                  : 'border-bd1 text-fg2 hover:text-fg1'
               }`}
             >
               {s}
@@ -84,10 +84,10 @@ export const TradesPage = React.memo(function TradesPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border-subtle bg-brand-panel">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-bd1 bg-card">
         <div className="h-full overflow-auto">
           <table className="min-w-[1120px] w-full border-collapse text-left text-xs">
-            <thead className="sticky top-0 z-10 border-b border-border-subtle bg-brand-panel text-[10px] uppercase tracking-wide text-text-dim">
+            <thead className="sticky top-0 z-10 border-b border-bd1 bg-card text-[10px] uppercase tracking-wide text-fg3">
               <tr>
                 <th className="px-3 py-2 font-semibold">Time</th>
                 <th className="px-3 py-2 font-semibold">Symbol</th>
@@ -103,34 +103,34 @@ export const TradesPage = React.memo(function TradesPage() {
                 <th className="px-3 py-2 font-semibold">Detail</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border-subtle">
+            <tbody className="divide-y divide-bd1">
               {isLoading && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center font-mono text-text-dim">
+                  <td colSpan={12} className="px-3 py-10 text-center font-mono text-fg3">
                     LOADING TRADES...
                   </td>
                 </tr>
               )}
               {!isLoading && error && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center font-mono text-accent-red">
+                  <td colSpan={12} className="px-3 py-10 text-center font-mono text-short">
                     FAILED TO LOAD TRADES
                   </td>
                 </tr>
               )}
               {!isLoading && !error && trades.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center font-mono text-text-dim">
+                  <td colSpan={12} className="px-3 py-10 text-center font-mono text-fg3">
                     NO TRADES RECORDED
                   </td>
                 </tr>
               )}
               {!isLoading && !error && trades.map((trade) => (
-                <tr key={trade.id} className="hover:bg-brand-base/40">
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-text-secondary">{fmtTime(trade.ts)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-text-primary">{trade.symbol}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-text-secondary">{trade.strategy}</td>
-                  <td className="max-w-[190px] truncate px-3 py-2 font-mono text-text-secondary">{trade.side}</td>
+                <tr key={trade.id} className="hover:bg-bg1/40">
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-fg2">{fmtTime(trade.ts)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-fg1">{trade.symbol}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-fg2">{trade.strategy}</td>
+                  <td className="max-w-[190px] truncate px-3 py-2 font-mono text-fg2">{trade.side}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono">
                     {fmtNum(trade.qty_filled, 6)} / {fmtNum(trade.qty_requested, 6)}
                   </td>
@@ -154,7 +154,7 @@ export const TradesPage = React.memo(function TradesPage() {
                       {trade.status}
                     </span>
                   </td>
-                  <td className="max-w-[260px] truncate px-3 py-2 text-text-dim" title={trade.detail ?? ''}>
+                  <td className="max-w-[260px] truncate px-3 py-2 text-fg3" title={trade.detail ?? ''}>
                     {trade.detail ?? '—'}
                   </td>
                 </tr>

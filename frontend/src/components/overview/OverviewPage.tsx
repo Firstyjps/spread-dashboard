@@ -18,13 +18,13 @@ interface Toast {
 }
 
 function staleDot(d: SymbolData | undefined): string {
-  if (!d) return 'bg-text-dim';
+  if (!d) return 'bg-fg3';
   const bybitAge = d.bybit?.received_at ? (Date.now() - d.bybit.received_at) / 1000 : 999;
   const lighterAge = d.lighter?.received_at ? (Date.now() - d.lighter.received_at) / 1000 : 999;
   const maxAge = Math.max(bybitAge, lighterAge);
-  if (maxAge < 5) return 'bg-accent-green';
-  if (maxAge < 15) return 'bg-accent-amber';
-  return 'bg-accent-red';
+  if (maxAge < 5) return 'bg-long';
+  if (maxAge < 15) return 'bg-warn';
+  return 'bg-short';
 }
 
 export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
@@ -47,6 +47,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
 
   // Active symbol context state
   const [activeSymbol, setActiveSymbol] = useState<string>('');
+  const [clearedAt, setClearedAt] = useState<number | null>(null);
 
   // Fallback to first symbol
   useEffect(() => {
@@ -108,10 +109,10 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
 
   if (!data) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-text-secondary">
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] text-fg2">
         <div className="text-center space-y-3">
-          <div className="w-8 h-8 rounded-full border-2 border-accent-amber/30 border-t-accent-amber animate-spin mx-auto" />
-          <p className="text-xs font-mono tracking-tight text-text-dim">CONNECTING TO EXCHANGES...</p>
+          <div className="w-8 h-8 rounded-full border-2 border-warn/30 border-t-warn animate-spin mx-auto" />
+          <p className="text-xs font-mono tracking-tight text-fg3">CONNECTING TO EXCHANGES...</p>
         </div>
       </div>
     );
@@ -147,11 +148,11 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
   const countdownMin = countdown != null ? Math.floor(countdown / 60000) : null;
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row min-h-0 divide-y lg:divide-y-0 lg:divide-x divide-border-subtle">
+    <div className="flex-1 flex flex-col lg:flex-row min-h-0 divide-y lg:divide-y-0 lg:divide-x divide-bd1">
       {/* 1. SIDEBAR (220px) */}
-      <aside className="hidden lg:flex w-[220px] shrink-0 bg-brand-base flex-col p-4 space-y-4">
+      <aside className="hidden lg:flex w-[220px] shrink-0 bg-bg1 flex-col p-4 space-y-4">
         <div>
-          <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-2.5">
+          <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider mb-2.5">
             Trading Pairs
           </h3>
           <div className="space-y-1">
@@ -167,8 +168,8 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                   onClick={() => setActiveSymbol(sym)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-md font-mono text-xs transition-all duration-150 border text-left ${
                     isActive
-                      ? 'bg-brand-panel border-accent-amber/30 text-text-primary shadow-[0_0_12px_rgba(245,166,35,0.05)] font-bold'
-                      : 'bg-transparent border-transparent text-text-secondary hover:text-text-primary hover:bg-brand-panel/50'
+                      ? 'bg-card border-warn/30 text-fg1 shadow-[0_0_12px_rgba(245,166,35,0.05)] font-bold'
+                      : 'bg-transparent border-transparent text-fg2 hover:text-fg1 hover:bg-card/50'
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -179,8 +180,8 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                     <span
                       className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
                         isActive
-                          ? 'bg-accent-amber/10 border-accent-amber/20 text-accent-amber'
-                          : 'bg-accent-green/10 border-accent-green/20 text-accent-green'
+                          ? 'bg-warn/10 border-warn/20 text-warn'
+                          : 'bg-long/10 border-long/20 text-long'
                       }`}
                     >
                       {symSpreadBps >= 0 ? '+' : ''}
@@ -194,57 +195,57 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
         </div>
 
         {/* Keyboard Shortcuts Helper */}
-        <div className="hidden lg:block border-t border-border-subtle pt-4 mt-auto">
-          <h4 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-2">
+        <div className="hidden lg:block border-t border-bd1 pt-4 mt-auto">
+          <h4 className="text-[10px] font-bold text-fg3 uppercase tracking-wider mb-2">
             Keys
           </h4>
           <div className="space-y-1.5 text-[10px] font-mono">
-            <div className="flex items-center justify-between text-text-secondary bg-brand-panel/30 px-2 py-1 rounded">
+            <div className="flex items-center justify-between text-fg2 bg-card/30 px-2 py-1 rounded">
               <span>Execute BUY</span>
-              <kbd className="bg-brand-panel border border-border-strong px-1.5 py-0.5 rounded text-text-primary font-bold">B</kbd>
+              <kbd className="bg-card border border-bd2 px-1.5 py-0.5 rounded text-fg1 font-bold">B</kbd>
             </div>
-            <div className="flex items-center justify-between text-text-secondary bg-brand-panel/30 px-2 py-1 rounded">
+            <div className="flex items-center justify-between text-fg2 bg-card/30 px-2 py-1 rounded">
               <span>Execute SELL</span>
-              <kbd className="bg-brand-panel border border-border-strong px-1.5 py-0.5 rounded text-text-primary font-bold">S</kbd>
+              <kbd className="bg-card border border-bd2 px-1.5 py-0.5 rounded text-fg1 font-bold">S</kbd>
             </div>
           </div>
         </div>
       </aside>
 
       {/* 2. MAIN CONTENT (Flex: 1) */}
-      <section className="flex-1 min-w-0 bg-brand-base flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6">
+      <section className="flex-1 min-w-0 bg-bg1 flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6">
         {/* Compact Auto-Hedge row */}
         <div className="hidden lg:block">
           <AutoHedgePanel />
         </div>
 
         {/* Hero Spread Card */}
-        <div className="bg-brand-panel border border-border-subtle rounded-lg p-5 relative overflow-hidden flex flex-col">
+        <div className="bg-card border border-bd1 rounded-lg p-5 relative overflow-hidden flex flex-col">
           {/* Top Amber gradient accent line */}
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-accent-amber to-transparent opacity-80" />
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-warn to-transparent opacity-80" />
 
           {/* Label Header row */}
           <div className="grid grid-cols-3 text-center mb-3">
             <div className="text-left">
-              <span className="text-[10px] font-bold text-text-dim uppercase tracking-wider">Bybit Mid</span>
+              <span className="text-[10px] font-bold text-fg3 uppercase tracking-wider">Bybit Mid</span>
             </div>
             <div>
-              <span className="text-[10px] font-bold text-accent-amber uppercase tracking-wider font-mono">SPREAD (bps)</span>
+              <span className="text-[10px] font-bold text-warn uppercase tracking-wider font-mono">SPREAD (bps)</span>
             </div>
             <div className="text-right">
-              <span className="text-[10px] font-bold text-accent-cyan uppercase tracking-wider">Lighter Mid</span>
+              <span className="text-[10px] font-bold text-info uppercase tracking-wider">Lighter Mid</span>
             </div>
           </div>
 
           {/* Main Price display row */}
-          <div className="grid grid-cols-3 items-center text-center py-2 border-b border-border-subtle/50 pb-4 mb-4">
+          <div className="grid grid-cols-3 items-center text-center py-2 border-b border-bd1/50 pb-4 mb-4">
             {/* Bybit Mid Price */}
             <div className="text-left font-mono">
-              <div className="text-xl sm:text-2xl font-bold text-text-primary">
+              <div className="text-xl sm:text-2xl font-bold text-fg1">
                 {bybitMid ? bybitMid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
               </div>
-              <div className="text-[10px] text-text-secondary/70 mt-1">
-                B/A: <span className="text-text-primary font-bold">{baBybit}</span> bps
+              <div className="text-[10px] text-fg2/70 mt-1">
+                B/A: <span className="text-fg1 font-bold">{baBybit}</span> bps
               </div>
             </div>
 
@@ -253,20 +254,20 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
               {/* Force React remounting on spread update to trigger the 120ms tick animation */}
               <div
                 key={`${activeSymbol}-${spreadBps}`}
-                className="text-3xl sm:text-4xl md:text-5xl font-mono font-black text-accent-amber animate-tick drop-shadow-[0_0_16px_rgba(245,166,35,0.2)]"
+                className="text-3xl sm:text-4xl md:text-5xl font-mono font-black text-warn animate-tick drop-shadow-[0_0_16px_rgba(245,166,35,0.2)]"
               >
                 {spreadBps}
               </div>
-              <div className="text-[9px] text-text-dim font-bold tracking-widest mt-1">REALTIME</div>
+              <div className="text-[9px] text-fg3 font-bold tracking-widest mt-1">REALTIME</div>
             </div>
 
             {/* Lighter Mid Price */}
             <div className="text-right font-mono">
-              <div className="text-xl sm:text-2xl font-bold text-accent-cyan">
+              <div className="text-xl sm:text-2xl font-bold text-info">
                 {lighterMid ? lighterMid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
               </div>
-              <div className="text-[10px] text-text-secondary/70 mt-1">
-                B/A: <span className="text-accent-cyan font-bold">{baLighter}</span> bps
+              <div className="text-[10px] text-fg2/70 mt-1">
+                B/A: <span className="text-info font-bold">{baLighter}</span> bps
               </div>
             </div>
           </div>
@@ -274,24 +275,24 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
           {/* Bottom row metrics */}
           <div className="grid grid-cols-3 text-xs font-mono">
             <div className="text-left">
-              <span className="text-text-dim text-[10px]">Long spread</span>
+              <span className="text-fg3 text-[10px]">Long spread</span>
               <div className="text-accent-indigo font-bold text-sm mt-0.5">{longBps} bps</div>
             </div>
             <div className="text-center flex flex-col items-center">
-              <span className="text-text-dim text-[10px]">Net Arbitrage PnL</span>
+              <span className="text-fg3 text-[10px]">Net Arbitrage PnL</span>
               <div
                 className={`font-black text-sm mt-0.5 ${
-                  netPnl == null ? 'text-text-dim' : netPnl > 0 ? 'text-accent-green' : 'text-accent-red'
+                  netPnl == null ? 'text-fg3' : netPnl > 0 ? 'text-long' : 'text-short'
                 }`}
               >
                 {netPnl != null ? `${netPnl > 0 ? '+' : ''}${netPnl.toFixed(2)} bps` : '—'}
               </div>
             </div>
             <div className="text-right">
-              <span className="text-text-dim text-[10px]">Latency (B / L)</span>
-              <div className="text-text-primary text-sm font-bold mt-0.5">
-                {latBybit ?? '—'} <span className="text-[9px] text-text-dim">ms</span> / {latLighter ?? '—'}{' '}
-                <span className="text-[9px] text-text-dim">ms</span>
+              <span className="text-fg3 text-[10px]">Latency (B / L)</span>
+              <div className="text-fg1 text-sm font-bold mt-0.5">
+                {latBybit ?? '—'} <span className="text-[9px] text-fg3">ms</span> / {latLighter ?? '—'}{' '}
+                <span className="text-[9px] text-fg3">ms</span>
               </div>
             </div>
           </div>
@@ -309,59 +310,59 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
       </section>
 
       {/* 3. RIGHT PANEL (300px) */}
-      <aside className="w-full lg:w-[300px] shrink-0 bg-brand-base flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6 divide-y divide-border-subtle lg:divide-y-0 lg:space-y-6">
+      <aside className="w-full lg:w-[300px] shrink-0 bg-bg1 flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6 divide-y divide-bd1 lg:divide-y-0 lg:space-y-6">
         {/* Health Section */}
         <div>
-          <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-3">
+          <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider mb-3">
             System Connectivity
           </h3>
           <div className="space-y-2 font-mono text-xs">
-            <div className="flex items-center justify-between bg-brand-panel/40 border border-border-subtle rounded px-3 py-2">
+            <div className="flex items-center justify-between bg-card/40 border border-bd1 rounded px-3 py-2">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${latBybit != null ? 'bg-accent-green' : 'bg-accent-red'}`} />
-                <span className="text-text-secondary font-sans font-medium">Bybit WebSocket</span>
+                <span className={`w-2 h-2 rounded-full ${latBybit != null ? 'bg-long' : 'bg-short'}`} />
+                <span className="text-fg2 font-sans font-medium">Bybit WebSocket</span>
               </div>
-              <span className="text-text-primary font-bold">{latBybit != null ? `${latBybit}ms` : 'FAIL'}</span>
+              <span className="text-fg1 font-bold">{latBybit != null ? `${latBybit}ms` : 'FAIL'}</span>
             </div>
-            <div className="flex items-center justify-between bg-brand-panel/40 border border-border-subtle rounded px-3 py-2">
+            <div className="flex items-center justify-between bg-card/40 border border-bd1 rounded px-3 py-2">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${latLighter != null ? 'bg-accent-green' : 'bg-accent-red'}`} />
-                <span className="text-text-secondary font-sans font-medium">Lighter Exchange API</span>
+                <span className={`w-2 h-2 rounded-full ${latLighter != null ? 'bg-long' : 'bg-short'}`} />
+                <span className="text-fg2 font-sans font-medium">Lighter Exchange API</span>
               </div>
-              <span className="text-accent-cyan font-bold">{latLighter != null ? `${latLighter}ms` : 'FAIL'}</span>
+              <span className="text-info font-bold">{latLighter != null ? `${latLighter}ms` : 'FAIL'}</span>
             </div>
           </div>
         </div>
 
         {/* Funding Rates Section */}
         <div className="hidden lg:block pt-5 lg:pt-0">
-          <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-3">
+          <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider mb-3">
             Funding Arb Edge
           </h3>
-          <div className="bg-brand-panel/30 border border-border-subtle rounded-lg p-3 space-y-3">
+          <div className="bg-card/30 border border-bd1 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-text-secondary font-sans font-medium">Countdown (Bybit)</span>
-              <span className="font-mono font-bold text-text-primary">
+              <span className="text-fg2 font-sans font-medium">Countdown (Bybit)</span>
+              <span className="font-mono font-bold text-fg1">
                 {countdownMin != null ? `${Math.floor(countdownMin / 60)}h ${countdownMin % 60}m` : '—'}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-              <div className="bg-brand-panel border border-border-subtle p-2 rounded">
-                <span className="text-text-dim text-[9px] uppercase font-bold">Bybit (8h)</span>
+              <div className="bg-card border border-bd1 p-2 rounded">
+                <span className="text-fg3 text-[9px] uppercase font-bold">Bybit (8h)</span>
                 <div
                   className={`text-sm font-bold mt-0.5 ${
-                    bybitFunding != null && bybitFunding > 0 ? 'text-accent-green' : 'text-text-primary'
+                    bybitFunding != null && bybitFunding > 0 ? 'text-long' : 'text-fg1'
                   }`}
                 >
                   {bybitFunding != null ? `${(bybitFunding * 100).toFixed(4)}%` : '—'}
                 </div>
               </div>
-              <div className="bg-brand-panel border border-border-subtle p-2 rounded">
-                <span className="text-text-dim text-[9px] uppercase font-bold">Lighter (1h)</span>
+              <div className="bg-card border border-bd1 p-2 rounded">
+                <span className="text-fg3 text-[9px] uppercase font-bold">Lighter (1h)</span>
                 <div
                   className={`text-sm font-bold mt-0.5 ${
-                    lighterFunding != null && lighterFunding > 0 ? 'text-accent-green' : 'text-accent-cyan'
+                    lighterFunding != null && lighterFunding > 0 ? 'text-long' : 'text-info'
                   }`}
                 >
                   {lighterFunding != null ? `${(lighterFunding * 100).toFixed(4)}%` : '—'}
@@ -370,11 +371,11 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
             </div>
 
             {netFunding8h != null && (
-              <div className="flex items-center justify-between text-xs border-t border-border-subtle/50 pt-2 font-mono">
-                <span className="text-text-dim font-sans font-medium">Net Edge / 8h</span>
+              <div className="flex items-center justify-between text-xs border-t border-bd1/50 pt-2 font-mono">
+                <span className="text-fg3 font-sans font-medium">Net Edge / 8h</span>
                 <span
                   className={`font-black ${
-                    netFunding8h > 0 ? 'text-accent-green' : 'text-accent-red'
+                    netFunding8h > 0 ? 'text-long' : 'text-short'
                   }`}
                 >
                   {netFunding8h > 0 ? '+' : ''}
@@ -387,40 +388,53 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
 
         {/* Activity / Alert Log Section */}
         <div className="hidden lg:flex pt-5 lg:pt-0 flex-1 flex-col min-h-[160px]">
-          <h3 className="text-[10px] font-bold text-text-dim uppercase tracking-wider mb-2.5">
-            System Operations Log
-          </h3>
-          <div className="flex-1 bg-brand-panel/20 border border-border-subtle rounded-lg p-3 font-mono text-[10px] overflow-y-auto space-y-2 max-h-[220px] lg:max-h-none">
-            {alertsData && Array.isArray(alertsData) && alertsData.length > 0 ? (
-              alertsData.slice(0, 15).map((a: Alert) => (
+          <div className="flex items-center justify-between mb-2.5">
+            <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider">
+              System Operations Log
+            </h3>
+            <button
+              onClick={() => setClearedAt(Date.now())}
+              className="text-[9px] font-bold text-fg3 hover:text-fg1 uppercase tracking-wider px-2 py-1 bg-card/50 hover:bg-card border border-bd1 rounded transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex-1 bg-card/20 border border-bd1 rounded-lg p-3 font-mono text-[10px] overflow-y-auto space-y-2 max-h-[220px] lg:max-h-none">
+            {alertsData && Array.isArray(alertsData) && alertsData.filter(a => !clearedAt || a.ts > clearedAt).length > 0 ? (
+              alertsData
+                .filter(a => !clearedAt || a.ts > clearedAt)
+                .slice(0, 15)
+                .map((a: Alert) => (
                 <div
                   key={a.id ?? a.ts}
-                  className="flex items-start gap-1.5 leading-relaxed text-text-secondary border-b border-border-subtle/20 pb-1"
+                  className="flex flex-col items-center leading-relaxed text-fg2 border-b border-bd1/20 pb-2 text-center space-y-1"
                 >
-                  <span className="text-text-dim font-bold shrink-0">
-                    {new Date(a.ts).toLocaleTimeString(undefined, {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
-                      hour12: false,
-                    })}
-                  </span>
-                  <span
-                    className={`shrink-0 font-bold ${
-                      a.severity === 'critical'
-                        ? 'text-accent-red'
-                        : a.severity === 'warning'
-                        ? 'text-accent-amber'
-                        : 'text-accent-cyan'
-                    }`}
-                  >
-                    [{a.severity.toUpperCase()}]
-                  </span>
-                  <span className="text-text-primary break-all">{a.message}</span>
+                  <div className="flex items-center justify-center gap-1.5 w-full">
+                    <span className="text-fg3 font-bold shrink-0">
+                      {new Date(a.ts).toLocaleTimeString(undefined, {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false,
+                      })}
+                    </span>
+                    <span
+                      className={`shrink-0 font-bold ${
+                        a.severity === 'critical'
+                          ? 'text-short'
+                          : a.severity === 'warning'
+                          ? 'text-warn'
+                          : 'text-info'
+                      }`}
+                    >
+                      [{a.severity.toUpperCase()}]
+                    </span>
+                  </div>
+                  <span className="text-fg1 break-all" dangerouslySetInnerHTML={{ __html: a.message }} />
                 </div>
               ))
             ) : (
-              <div className="text-text-dim text-center py-4">LOG STREAM EMPTY</div>
+              <div className="text-fg3 text-center py-4">LOG STREAM EMPTY</div>
             )}
           </div>
         </div>
@@ -431,9 +445,9 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className="bg-brand-panel border border-border-strong text-text-primary px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 animate-[slide-up_180ms_ease-out_forwards] max-w-sm transition-all duration-150 hover:border-accent-amber/50"
+            className="bg-card border border-bd2 text-fg1 px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 animate-[slide-up_180ms_ease-out_forwards] max-w-sm transition-all duration-150 hover:border-warn/50"
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-accent-green animate-pulse-fast" />
+            <div className="w-1.5 h-1.5 rounded-full bg-long animate-pulse-fast" />
             <div className="font-mono text-xs font-semibold tracking-tight">{toast.message}</div>
           </div>
         ))}
