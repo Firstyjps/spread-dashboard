@@ -20,27 +20,28 @@ export function PairCard({
   currentSpreadBps,
   history
 }: PairCardProps) {
-  const isPositive = currentSpreadBps > 0;
-  const isZero = currentSpreadBps === 0;
+  const spread = Number.isFinite(Number(currentSpreadBps)) ? Number(currentSpreadBps) : 0;
+  const isPositive = spread > 0;
+  const isZero = spread === 0;
   const colorClass = isPositive ? 'text-green-500' : isZero ? 'text-fg3' : 'text-red-500';
   const chartColor = isPositive ? '#22c55e' : isZero ? '#888888' : '#ef4444'; 
 
   return (
-    <div className="flex flex-col p-4 bg-card border border-bd1 rounded-lg cursor-pointer hover:bg-card/80 transition-colors">
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex flex-col">
-          <span className="font-medium text-sm text-fg1 capitalize">
+    <div className="flex flex-col p-4 bg-card border border-bd1 rounded-lg cursor-pointer hover:bg-card/80 transition-colors overflow-hidden">
+      <div className="flex justify-between items-start gap-3 mb-2 min-w-0">
+        <div className="flex min-w-0 flex-col">
+          <span className="font-medium text-sm text-fg1 capitalize truncate">
             {exchangeA} ↔ {exchangeB}
           </span>
-          <span className="text-xs text-fg3">
+          <span className="text-xs text-fg3 truncate">
             {symbolA} / {symbolB}
           </span>
         </div>
-        <div className={cn("text-right font-mono font-medium", colorClass)}>
-          {currentSpreadBps > 0 ? '+' : ''}{currentSpreadBps.toFixed(1)} bps
+        <div className={cn("shrink-0 text-right font-mono font-medium tabular-nums", colorClass)}>
+          {spread > 0 ? '+' : ''}{spread.toFixed(1)} bps
         </div>
       </div>
-      <div className="mt-2">
+      <div className="mt-2 min-w-0">
         <SpreadMiniChart data={history} color={chartColor} />
       </div>
     </div>

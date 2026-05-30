@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { AreaChart, Area, ReferenceLine, ResponsiveContainer, YAxis, XAxis, CartesianGrid, Tooltip } from 'recharts';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AreaChart, Area, ReferenceLine, YAxis, XAxis, CartesianGrid, Tooltip } from 'recharts';
 
 export type ChartDataPoint = {
   ts: number;
@@ -11,6 +11,8 @@ interface Props {
   color: string;
 }
 
+const CHART_HEIGHT = 152;
+
 function computePercentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = (p / 100) * (sorted.length - 1);
@@ -20,19 +22,47 @@ function computePercentile(sorted: number[], p: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
-export function SpreadMiniChart({ data, color }: Props) {
-  if (!data || data.length === 0) {
-    return <div className="h-32 w-full flex items-center justify-center text-xs text-fg3">No data</div>;
-  }
+function computeDomain(values: number[]): [number, number] {
+  if (values.length === 0) return [-1, 1];
 
-  const { p10, p90 } = useMemo(() => {
-    const values = data.map(d => d.value).filter(v => v != null);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+  const pad = range === 0
+    ? Math.max(Math.abs(max) * 0.01, 0.5)
+    : Math.max(range * 0.18, 0.25);
+
+  return [min - pad, max + pad];
+}
+
+function formatBpsTick(value: number): string {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '';
+  return Math.abs(number) >= 100 ? number.toFixed(0) : number.toFixed(1);
+}
+
+export function SpreadMiniChart({ data, color }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+
+  const chartData = useMemo(
+    () => (data ?? [])
+      .map((point) => ({ ts: Number(point.ts), value: Number(point.value) }))
+      .filter((point) => Number.isFinite(point.ts) && Number.isFinite(point.value)),
+    [data],
+  );
+
+  const { p10, p90, domain } = useMemo(() => {
+    const values = chartData.map(d => d.value);
     const sorted = [...values].sort((a, b) => a - b);
+    const nextP10 = computePercentile(sorted, 10);
+    const nextP90 = computePercentile(sorted, 90);
     return {
-      p10: computePercentile(sorted, 10),
-      p90: computePercentile(sorted, 90),
+      p10: nextP10,
+      p90: nextP90,
+      domain: computeDomain([...values, nextP10, nextP90]),
     };
-  }, [data]);
+  }, [chartData]);
 
   const formatTime = (ts: number) => {
     const d = new Date(ts);
@@ -41,10 +71,29 @@ export function SpreadMiniChart({ data, color }: Props) {
 
   const gradId = `grad-${color.replace('#', '')}`;
 
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    const updateWidth = () => {
+      const width = Math.floor(node.getBoundingClientRect().width);
+      setChartWidth(width > 0 ? width : 0);
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  if (chartData.length === 0) {
+    return <div className="h-32 w-full flex items-center justify-center text-xs text-fg3">No data</div>;
+  }
+
   return (
-    <div className="h-36 w-full -ml-4">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+    <div ref={containerRef} className="h-[152px] w-full min-w-0 overflow-hidden">
+      {chartWidth > 0 && (
+        <AreaChart width={chartWidth} height={CHART_HEIGHT} data={chartData} margin={{ top: 12, right: 8, left: 4, bottom: 2 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor={color} stopOpacity={0.3} />
@@ -58,16 +107,22 @@ export function SpreadMiniChart({ data, color }: Props) {
             axisLine={false} 
             tickLine={false} 
             tick={{ fill: '#888', fontSize: 10 }}
-            minTickGap={20}
+            tickMargin={8}
+            minTickGap={28}
+            interval="preserveStartEnd"
+            padding={{ left: 10, right: 18 }}
+            height={24}
           />
           <YAxis 
-            domain={['auto', 'auto']} 
+            domain={domain}
             orientation="right" 
             axisLine={false} 
             tickLine={false} 
             tick={{ fill: '#888', fontSize: 10 }}
-            width={35}
-            tickFormatter={(val) => val.toFixed(1)}
+            tickMargin={6}
+            tickCount={5}
+            width={48}
+            tickFormatter={formatBpsTick}
           />
           <Tooltip 
             contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '4px', fontSize: '12px', color: '#fff' }}
@@ -99,7 +154,7 @@ export function SpreadMiniChart({ data, color }: Props) {
             isAnimationActive={false}
           />
         </AreaChart>
-      </ResponsiveContainer>
+      )}
     </div>
   );
 }

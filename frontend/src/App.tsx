@@ -26,6 +26,7 @@ type Page = 'overview' | 'portfolio' | 'trades' | 'history' | 'health' | 'settin
 
 // Flush buffered WS data to React state at this rate (~4fps)
 const WS_FLUSH_INTERVAL_MS = 250;
+const MONITOR_ERROR_RESET_KEY = 'monitor-chart-runtime-fix-20260530';
 
 export default function App() {
   const { isAuthenticated } = useAuth();
@@ -144,7 +145,7 @@ export default function App() {
         )}
         {page === 'monitor' && (
           <div className="p-4 sm:p-6 w-[90%] mx-auto flex-1 flex flex-col min-h-0">
-            <ErrorBoundary resetKey={page}>
+            <ErrorBoundary resetKey={`${page}:${MONITOR_ERROR_RESET_KEY}`}>
               <Suspense fallback={<PageFallback />}>
                 <MonitorPage />
               </Suspense>

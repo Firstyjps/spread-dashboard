@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api, type MonitorTimeframe } from '../../services/api';
+import { api, type MonitorHistoryBucket, type MonitorTimeframe } from '../../services/api';
 import { PairCard } from './PairCard';
 import { SpreadModeToggle, SpreadMode } from './SpreadModeToggle';
 import { PairSelector } from './PairSelector';
@@ -11,14 +11,11 @@ type PairHistory = Record<string, ChartDataPoint[]>;
 
 const MAX_HISTORY_POINTS = 300; // ~10 min at 2s poll
 
-// History window (minutes) requested from the backend per timeframe.
-// Capped at the endpoint max of 10080 (7 days).
-const TIMEFRAME_WINDOW_MIN: Record<Exclude<MonitorTimeframe, 'raw'>, number> = {
-  '1m': 180,
-  '5m': 720,
-  '15m': 1440,
-  '1h': 10080,
-  '4h': 10080,
+// UI timeframe presets. Backend still receives an aggregation bucket.
+const TIMEFRAME_OPTIONS: Record<MonitorTimeframe, { minutes: number; bucket: MonitorHistoryBucket }> = {
+  '4h': { minutes: 240, bucket: '1m' },
+  '24h': { minutes: 1440, bucket: '5m' },
+  '7d': { minutes: 10080, bucket: '1h' },
 };
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
@@ -35,11 +32,9 @@ function getSpreadValue(pair: any, mode: SpreadMode): number {
 
 export function MonitorPage() {
   const [mode, setMode] = useState<SpreadMode>('executable');
-  const [timeframe, setTimeframe] = useState<MonitorTimeframe>('raw');
+  const [timeframe, setTimeframe] = useState<MonitorTimeframe>('4h');
   const [selectedPairs, setSelectedPairs] = useState<string[]>([]);
   const historyRef = useRef<PairHistory>({});
-
-  const isLive = timeframe === 'raw';
 
   const { data: spreadsData } = useQuery({
     queryKey: ['monitorSpreads'],
@@ -47,7 +42,7 @@ export function MonitorPage() {
     refetchInterval: 2000,
   });
 
-  // Accumulate client-side history from each poll (used for the "Live" timeframe)
+  // Keep a short local fallback while backend history warms up.
   useEffect(() => {
     if (!spreadsData?.pairs) return;
     const ts = spreadsData.ts ?? Date.now();
@@ -68,17 +63,17 @@ export function MonitorPage() {
     }
   }, [spreadsData]);
 
-  // Fetch downsampled history from the backend when a non-live timeframe is active.
+  // Fetch downsampled history from the backend for the selected chart range.
   const { data: backendHistory } = useQuery({
     queryKey: ['monitorHistory', timeframe, mode, [...selectedPairs].sort()],
-    enabled: !isLive && selectedPairs.length > 0,
+    enabled: selectedPairs.length > 0,
     refetchInterval: 15000,
     queryFn: async () => {
-      const minutes = TIMEFRAME_WINDOW_MIN[timeframe as Exclude<MonitorTimeframe, 'raw'>];
+      const { minutes, bucket } = TIMEFRAME_OPTIONS[timeframe];
       const results = await Promise.all(
         selectedPairs.map(async (pairId) => {
           try {
-            const res = await api.monitorHistory(pairId, { minutes, timeframe });
+            const res = await api.monitorHistory(pairId, { minutes, timeframe: bucket });
             const points: ChartDataPoint[] = (res.history ?? [])
               .map((row) => ({ ts: toFiniteNumber(row.ts), value: getSpreadValue(row, mode) }))
               .filter((p) => Number.isFinite(p.ts) && Number.isFinite(p.value));
@@ -107,10 +102,11 @@ export function MonitorPage() {
       exchangeB: p.exchange_b,
       symbolB: p.symbol_b,
       currentSpreadBps: getSpreadValue(p, mode),
-      history: isLive
-        ? historyRef.current[p.id] ?? []
-        : backendHistory?.[p.id] ?? [],
-    }));
+      history: backendHistory?.[p.id]?.length
+        ? backendHistory[p.id]
+        : historyRef.current[p.id] ?? [],
+    }))
+    .sort((a, b) => b.currentSpreadBps - a.currentSpreadBps);
 
   return (
     <div className="flex flex-col h-full gap-4 p-4 sm:p-6">

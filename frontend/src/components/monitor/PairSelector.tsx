@@ -10,6 +10,7 @@ interface PairSelectorProps {
 
 export function PairSelector({ availablePairs, selectedPairs, onChange }: PairSelectorProps) {
   const [open, setOpen] = useState(false);
+  const selectedAvailableCount = availablePairs.filter((pair) => selectedPairs.includes(pair.id)).length;
 
   const togglePair = (id: string) => {
     if (selectedPairs.includes(id)) {
@@ -26,7 +27,7 @@ export function PairSelector({ availablePairs, selectedPairs, onChange }: PairSe
         className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-bg1 border border-bd1 rounded-md text-fg2 hover:text-fg1 hover:bg-bg2 transition-colors"
       >
         <Settings2 size={14} />
-        Pairs ({selectedPairs.length}/{availablePairs.length})
+        Pairs ({selectedAvailableCount}/{availablePairs.length})
       </button>
       
       {open && (

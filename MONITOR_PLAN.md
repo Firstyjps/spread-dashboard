@@ -6,6 +6,42 @@
 
 ---
 
+## 0. Progress Summary
+
+**Status legend:** `[ ]` not started · `[~]` partial · `[x]` done
+
+| Phase | หัวข้อ | สถานะ |
+|-------|--------|-------|
+| Phase A | Backend: Exchange Adapters + API | ✅ DONE |
+| Phase B | Frontend: Monitor Page | ✅ DONE |
+| Phase C | Config & Polish | ✅ DONE |
+
+### Task Status
+
+| Task | หัวข้อ | สถานะ | หมายเหตุ |
+|------|--------|-------|----------|
+| M.1 | ExchangeAdapter base + registry | `[x]` | `base.py` + `registry.py` พร้อม spread formulas ครบ |
+| M.2 | Binance collector (Tier 1) | `[x]` | committed |
+| M.3 | Hyperliquid collector (Tier 1) | `[x]` | committed |
+| M.4 | OKX collector (Tier 1) | `[x]` | committed |
+| M.5 | GRVT collector (Tier 2) | `[x]` | **ของจริง** ไม่ใช่ stub (REST book + health) |
+| M.6 | Aster collector (Tier 2) | `[x]` | **ของจริง** ไม่ใช่ stub (bookTicker + ping) |
+| M.7 | Monitor API + poll loop | `[x]` | routes + `services/monitor.py` + supervised poll loop + WS `monitor_update` |
+| M.8 | MonitorPage + routing | `[x]` | committed |
+| M.9 | PairCard + SpreadMiniChart | `[x]` | อัปเกรดเป็น AreaChart พร้อม grid/axes |
+| M.10 | SpreadModeToggle + PairSelector | `[x]` | Executable/Mid/Net + pair toggle |
+| M.11 | Connect API + WS | `[x]` | `api.monitorSpreads()` + 2s poll |
+| M.12 | Monitor เข้า SideNav | `[x]` | icon = Activity |
+| M.13 | Config (monitor_groups, fees) | `[x]` | fee rates + alert threshold settings |
+| M.14 | Alert integration (Telegram) | `[x]` | แจ้งเตือนเมื่อ spread เกิน threshold |
+| M.15 | Timeframe selector (1m/5m/15m/1h/4h) | `[x]` | `TimeframeToggle` ต่อกับ `/monitor/history` (downsampling); Live = client history, อื่น ๆ = backend |
+| M.16 | MEXC collector | `[x]` | REST contract ticker + ping, register เข้า registry + เพิ่มใน monitor_groups |
+
+### งานที่เหลือ
+- ไม่มีงานค้างแล้ว ✅ (ทุก task commit แล้ว)
+
+---
+
 ## 1. Concept
 
 ### ปัญหาที่แก้

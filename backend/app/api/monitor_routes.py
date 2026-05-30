@@ -22,7 +22,7 @@ async def monitor_spreads(group: str = Query(default="gold")):
 async def monitor_history(
     pair: str,
     minutes: int = Query(default=60, ge=1, le=10080),
-    timeframe: str = Query(default="raw", regex="^(raw|1m|5m|15m|1h|4h)$"),
+    timeframe: str = Query(default="raw", pattern="^(raw|1m|5m|15m|1h|4h)$"),
 ):
     """Get spread history for a pair, optionally downsampled to a timeframe."""
     service = get_monitor_service()
