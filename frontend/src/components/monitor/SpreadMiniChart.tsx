@@ -81,7 +81,6 @@ export function SpreadMiniChart({ data, color }: Props) {
             stroke="#facc15"
             strokeDasharray="4 3"
             strokeWidth={1}
-            label={{ value: `P90: ${p90.toFixed(1)}`, position: 'right', fill: '#facc15', fontSize: 9 }}
           />
           {/* P10 reference line (lower band) */}
           <ReferenceLine
@@ -89,7 +88,6 @@ export function SpreadMiniChart({ data, color }: Props) {
             stroke="#60a5fa"
             strokeDasharray="4 3"
             strokeWidth={1}
-            label={{ value: `P10: ${p10.toFixed(1)}`, position: 'right', fill: '#60a5fa', fontSize: 9 }}
           />
           <Area
             type="monotone"
