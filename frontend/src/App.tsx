@@ -74,9 +74,11 @@ export default function App() {
 
   const priceData = wsData || restData || null;
 
-  if (!isAuthenticated) {
-    return <LoginPage />;
-  }
+  // Auth disabled — single-user tool behind Cloudflare.
+  // Uncomment below to re-enable login gate:
+  // if (!isAuthenticated) {
+  //   return <LoginPage />;
+  // }
 
   return (
     <div className="font-sans select-none bg-background text-foreground">
