@@ -9,7 +9,7 @@ Spread Dashboard คือระบบ real-time price monitoring และ anal
 
 ### Verified API Endpoints
 
-**Bybit V5 API** (base: `https://api.bybit.com`)
+**Bybit V5 API** (base: `https://api.bytick.com` — official alternative, used because `api.bybit.com` is blocked by some Thai ISPs)
 - REST: `GET /v5/market/tickers` (category=linear/spot)
 - REST: `GET /v5/market/orderbook` (category, symbol, limit)
 - WS Public Linear: `wss://stream.bybit.com/v5/public/linear`
