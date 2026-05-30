@@ -9,7 +9,7 @@ import time
 import structlog
 from typing import Optional
 from app.config import settings
-from app.models import NormalizedTick, FundingSnapshot, SpreadMetric, Alert, TradeRecord
+from app.models import NormalizedTick, SpreadMetric, Alert, TradeRecord
 
 log = structlog.get_logger()
 
@@ -73,20 +73,6 @@ async def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_ticks_lookup
             ON ticks(exchange, symbol, ts);
-
-        CREATE TABLE IF NOT EXISTS funding_snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts REAL NOT NULL,
-            exchange TEXT NOT NULL,
-            symbol TEXT NOT NULL,
-            funding_rate REAL NOT NULL,
-            predicted_rate REAL,
-            next_funding_time REAL,
-            funding_interval_hours REAL,
-            annualized_rate REAL
-        );
-        CREATE INDEX IF NOT EXISTS idx_funding_lookup
-            ON funding_snapshots(exchange, symbol, ts);
 
         CREATE TABLE IF NOT EXISTS spread_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

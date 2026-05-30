@@ -12,6 +12,9 @@ backend/.env
 
 # Database
 *.db
+*.db-shm
+*.db-wal
+data/
 backend/data/
 
 # Node
