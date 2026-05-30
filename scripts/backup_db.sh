@@ -3,8 +3,8 @@
 # 0 3 * * * /home/deploy/spread-dashboard/scripts/backup_db.sh
 set -e
 
-DB_PATH="/home/deploy/spread-dashboard/backend/data/spread_dashboard.db"
-BACKUP_DIR="/home/deploy/spread-dashboard/backend/data/backups"
+DB_PATH="/home/deploy/alphast/backend/data/spread_dashboard.db"
+BACKUP_DIR="/home/deploy/alphast/backend/data/backups"
 
 mkdir -p "$BACKUP_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

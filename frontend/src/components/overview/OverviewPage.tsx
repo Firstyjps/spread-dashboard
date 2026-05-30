@@ -5,7 +5,7 @@ import { api } from '../../services/api';
 import { SpreadChart } from './SpreadChart';
 import { ExecutionPanel } from './ExecutionPanel';
 import { AutoHedgePanel } from './AutoHedgePanel';
-import type { SymbolData, SymbolDataMap, Alert } from '../../types/api';
+import type { SymbolDataMap, Alert } from '../../types/api';
 
 interface Props {
   data: SymbolDataMap | null;
@@ -15,16 +15,6 @@ interface Toast {
   id: string;
   message: string;
   type: 'success' | 'info' | 'error';
-}
-
-function staleDot(d: SymbolData | undefined): string {
-  if (!d) return 'bg-fg3';
-  const bybitAge = d.bybit?.received_at ? (Date.now() - d.bybit.received_at) / 1000 : 999;
-  const lighterAge = d.lighter?.received_at ? (Date.now() - d.lighter.received_at) / 1000 : 999;
-  const maxAge = Math.max(bybitAge, lighterAge);
-  if (maxAge < 5) return 'bg-long';
-  if (maxAge < 15) return 'bg-warn';
-  return 'bg-short';
 }
 
 export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
@@ -149,70 +139,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
 
   return (
     <div className="flex-1 flex flex-col lg:flex-row min-h-0 divide-y lg:divide-y-0 lg:divide-x divide-bd1">
-      {/* 1. SIDEBAR (220px) */}
-      <aside className="hidden lg:flex w-[220px] shrink-0 bg-bg1 flex-col p-4 space-y-4">
-        <div>
-          <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider mb-2.5">
-            Trading Pairs
-          </h3>
-          <div className="space-y-1">
-            {allSymbols.map((sym) => {
-              const isActive = sym === activeSymbol;
-              const symData = data[sym];
-              const symSpread = symData?.spread;
-              const symSpreadBps = symSpread ? symSpread.exchange_spread_mid * 10000 : null;
-
-              return (
-                <button
-                  key={sym}
-                  onClick={() => setActiveSymbol(sym)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md font-mono text-xs transition-all duration-150 border text-left ${
-                    isActive
-                      ? 'bg-card border-warn/30 text-fg1 shadow-[0_0_12px_rgba(245,166,35,0.05)] font-bold'
-                      : 'bg-transparent border-transparent text-fg2 hover:text-fg1 hover:bg-card/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${staleDot(symData)}`} />
-                    <span>{sym.replace('USDT', '')}</span>
-                  </div>
-                  {symSpreadBps != null && (
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
-                        isActive
-                          ? 'bg-warn/10 border-warn/20 text-warn'
-                          : 'bg-long/10 border-long/20 text-long'
-                      }`}
-                    >
-                      {symSpreadBps >= 0 ? '+' : ''}
-                      {symSpreadBps.toFixed(1)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Keyboard Shortcuts Helper */}
-        <div className="hidden lg:block border-t border-bd1 pt-4 mt-auto">
-          <h4 className="text-[10px] font-bold text-fg3 uppercase tracking-wider mb-2">
-            Keys
-          </h4>
-          <div className="space-y-1.5 text-[10px] font-mono">
-            <div className="flex items-center justify-between text-fg2 bg-card/30 px-2 py-1 rounded">
-              <span>Execute BUY</span>
-              <kbd className="bg-card border border-bd2 px-1.5 py-0.5 rounded text-fg1 font-bold">B</kbd>
-            </div>
-            <div className="flex items-center justify-between text-fg2 bg-card/30 px-2 py-1 rounded">
-              <span>Execute SELL</span>
-              <kbd className="bg-card border border-bd2 px-1.5 py-0.5 rounded text-fg1 font-bold">S</kbd>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* 2. MAIN CONTENT (Flex: 1) */}
+      {/* 1. MAIN CONTENT (Flex: 1) */}
       <section className="flex-1 min-w-0 bg-bg1 flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6">
         {/* Compact Auto-Hedge row */}
         <div className="hidden lg:block">
@@ -309,8 +236,8 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
         <SpreadChart symbol={activeSymbol} />
       </section>
 
-      {/* 3. RIGHT PANEL (300px) */}
-      <aside className="w-full lg:w-[300px] shrink-0 bg-bg1 flex flex-col p-4 sm:p-6 overflow-y-auto space-y-6 divide-y divide-bd1 lg:divide-y-0 lg:space-y-6">
+      {/* 2. RIGHT PANEL (matches desktop side nav width) */}
+      <aside className="w-full lg:w-[280px] shrink-0 bg-bg1 flex flex-col p-[24px] overflow-y-auto space-y-6 divide-y divide-bd1 lg:divide-y-0 lg:space-y-6">
         {/* Health Section */}
         <div>
           <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider mb-3">

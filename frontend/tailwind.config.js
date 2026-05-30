@@ -59,8 +59,8 @@ export default {
         ring: "hsl(var(--ring))",
       },
       fontFamily: {
-        sans: ["Geist", "var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif", "Inter"],
-        mono: ["Geist Mono", "var(--font-mono)", "ui-monospace", "monospace"],
+        sans: ["Manrope", "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        mono: ["Manrope", "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
       },
       borderRadius: {
         lg: "6px",

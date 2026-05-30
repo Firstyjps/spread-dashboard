@@ -133,8 +133,8 @@ export function TopNav({
         onClick={() => onPageChange('overview')}
         className="flex items-center gap-2.5 pr-3 sm:pr-4 sm:border-r sm:border-bd1 h-full focus-ring"
       >
-        <img src="/logo-icon.png" alt="SpreadDash" className="w-8 h-8 rounded-[5px] object-cover bg-black" />
-        <span className="font-semibold text-[17px] tracking-tight text-white">spread<span className="text-warn">.</span>dash</span>
+        <img src="/alphast-mark.svg" alt="alphast.xyz" className="w-8 h-8 rounded-[5px] object-cover bg-black" />
+        <span className="font-semibold text-[17px] tracking-tight text-white">alphast<span className="text-long">.xyz</span></span>
       </button>
 
       <div className="hidden sm:flex items-center gap-2 pl-1">

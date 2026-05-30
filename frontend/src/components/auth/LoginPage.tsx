@@ -62,11 +62,11 @@ export function LoginPage() {
             <div className="flex flex-col items-center mb-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 ease-out">
               <div className="relative flex items-center justify-center w-16 h-16 rounded-[20px] bg-white/[0.02] border border-white/[0.08] shadow-[0_0_15px_rgba(255,255,255,0.03)] mb-6 overflow-hidden group hover:border-white/[0.15] transition-colors duration-500">
                 <div className="absolute inset-0 bg-gradient-to-b from-white/[0.08] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <img src="/logo-icon.png" alt="Deritrade" className="w-10 h-10 object-cover rounded-lg" />
+                <img src="/alphast-mark.svg" alt="alphast.xyz" className="w-10 h-10 object-cover rounded-lg" />
               </div>
-              <h1 className="text-[22px] font-medium tracking-[-0.02em] mb-2 text-white/90">Log in to Deritrade</h1>
+              <h1 className="text-[22px] font-medium tracking-[-0.02em] mb-2 text-white/90">Log in to alphast.xyz</h1>
               <p className="text-[13px] text-white/40 text-center max-w-[260px] leading-relaxed">
-                Enter your operator workspace to manage derivatives campaigns.
+                Enter your operator workspace to manage spread and funding operations.
               </p>
             </div>
 
@@ -127,7 +127,7 @@ export function LoginPage() {
             
             <div className="mt-12 text-center animate-in fade-in duration-1000 delay-300 fill-mode-both">
               <p className="text-[11px] text-white/20 font-medium tracking-wide uppercase">
-                DERITRADE ENGINE v0.42.1
+                ALPHAST.XYZ ENGINE v0.42.1
               </p>
             </div>
           </div>
@@ -146,10 +146,10 @@ export function LoginPage() {
       <section className="relative z-10 py-32 px-6 max-w-[1000px] mx-auto border-t border-white/[0.05]">
         <div className="mb-20">
           <h2 className="text-[32px] md:text-[40px] font-medium tracking-tight text-white mb-4 leading-[1.1]">
-            Private campaign operations for<br className="hidden md:block" /> derivatives desks.
+            Private spread operations for<br className="hidden md:block" /> derivatives desks.
           </h2>
           <p className="text-[20px] md:text-[24px] text-white/40 font-medium tracking-tight leading-tight max-w-[600px]">
-            Launch, monitor, and review deterministic bot runs across owner-scoped accounts.
+            Monitor cross-venue spreads, hedges, and funding edge across owner-scoped accounts.
           </p>
         </div>
 
@@ -199,7 +199,7 @@ export function LoginPage() {
       <section className="relative z-10 py-32 px-6 border-t border-white/[0.05] bg-gradient-to-b from-transparent to-black">
         <div className="max-w-[700px] mx-auto text-center">
           <h2 className="text-[32px] md:text-[48px] font-medium tracking-tight text-white mb-10 leading-[1.1]">
-            Built for controlled<br /> campaigns.<br />
+            Built for controlled<br /> spread operations.<br />
             Available to approved<br /> operators.
           </h2>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -218,7 +218,7 @@ export function LoginPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-10 mb-20">
           <div className="col-span-2 md:col-span-1">
             <div className="w-8 h-8 rounded-lg bg-white/[0.03] border border-white/[0.08] flex items-center justify-center">
-              <span className="font-medium text-white/80 text-[14px]">D</span>
+              <span className="font-medium text-white/80 text-[14px]">A</span>
             </div>
           </div>
           

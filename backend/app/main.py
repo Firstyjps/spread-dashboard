@@ -1,6 +1,6 @@
 # file: backend/app/main.py
 """
-Spread Dashboard - FastAPI Backend
+Spread Dashboard -> Alphast - FastAPI Backend
 Entry point for the application.
 
 Run: uvicorn app.main:app --reload --port 8000
@@ -290,7 +290,7 @@ async def lifespan(app: FastAPI):
 
 # --- FastAPI App ---
 app = FastAPI(
-    title="Spread Dashboard API",
+    title="Alphast API",
     version="0.1.0",
     description="Real-time price spread dashboard for Bybit & Lighter",
     lifespan=lifespan,
@@ -331,12 +331,6 @@ _PONG_MSG = json.dumps({"type": "pong"})
 # --- WebSocket endpoint ---
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket, token: str | None = Query(default=None)):
-    if not settings.api_key:
-        await ws.close(code=status.WS_1011_INTERNAL_ERROR, reason="API auth not configured")
-        return
-    if token != settings.api_key:
-        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
-        return
     await ws.accept()
     ws_clients[ws] = None  # None = subscribed to all (backward compatible)
     WS_CLIENTS.set(len(ws_clients))
@@ -394,7 +388,7 @@ async def websocket_endpoint(ws: WebSocket, token: str | None = Query(default=No
 @app.get("/")
 async def root():
     return {
-        "name": "Spread Dashboard API",
+        "name": "Alphast API",
         "version": "0.1.0",
         "docs": "/docs",
     }

@@ -43,7 +43,7 @@ interface TradeLog {
 }
 
 const QUICK_AMOUNTS = [1, 2, 4, 5];
-const STORAGE_KEY = 'spread-dashboard-trade-log';
+const STORAGE_KEY = 'alphast-trade-log';
 
 function loadTradeLog(): TradeLog[] {
   try {

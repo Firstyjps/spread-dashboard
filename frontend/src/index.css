@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,7 +7,7 @@
 @layer base {
   body {
     margin: 0;
-    font-family: 'Geist', 'Inter', -apple-system, sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background-color: #0a0a0b;
     color: #ededed;
   }
@@ -104,7 +104,7 @@
 }
 
 
-/* --- MERGED DERITRADE STYLES --- */
+  /* --- MERGED ALPHAST.XYZ STYLES --- */
 @layer base {
   :root {
     --background: 0 0% 4%;
@@ -135,7 +135,7 @@
   html,
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Geist', var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
     line-height: 1.55;
   }
@@ -147,7 +147,7 @@
 
 @layer components {
   .num {
-    font-family: var(--font-mono), ui-monospace, monospace;
+    font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
   }

@@ -1,4 +1,4 @@
-# Implementation Plan — Spread Dashboard Refactor & Cleanup
+# Implementation Plan — Alphast Refactor & Cleanup
 
 > เอกสารนี้เป็น execution plan สำหรับ refactor/cleanup ของโปรเจค
 > อัปเดตล่าสุด: 30 พ.ค. 2026

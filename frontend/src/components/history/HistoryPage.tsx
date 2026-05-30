@@ -13,7 +13,7 @@ import {
   Brush,
 } from 'recharts';
 import { api } from '../../services/api';
-import type { SpreadRow, SpreadHistoryPoint, ChartPoint } from '../../types/api';
+import type { SpreadHistoryPoint, ChartPoint } from '../../types/api';
 
 const MAX_CHART_POINTS = 768;
 const HISTORY_DAYS = 90;
@@ -59,7 +59,7 @@ export const HistoryPage = React.memo(function HistoryPage() {
     staleTime: 60000,
   });
 
-  const history = data?.history ?? [];
+  const history: SpreadHistoryPoint[] = data?.history ?? [];
   const count = data?.count ?? 0;
   const stats = data?.stats as
     | { p10: number | null; p90: number | null; mean: number | null; n: number }

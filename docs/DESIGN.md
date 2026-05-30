@@ -1,8 +1,8 @@
-# Spread Dashboard - System Design Document
+# Alphast - System Design Document
 
 ## Executive Summary
 
-Spread Dashboard คือระบบ real-time price monitoring และ analytics platform
+Alphast คือระบบ real-time price monitoring และ analytics platform
 สำหรับเปรียบเทียบราคาระหว่าง **Bybit** (CEX) และ **Lighter** (DEX/zkRollup)
 เป้าหมายระยะสั้นคือ MVP dashboard แสดงราคา/spread แบบ real-time
 เป้าหมายระยะยาวคือ statistics engine + execution tool สำหรับ arbitrage R&D
@@ -569,7 +569,7 @@ async def execute_arb(opportunity: OpportunityEvent):
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  [Logo] Spread Dashboard    [BTC] [ETH] [Health]│  <- Top nav
+│  [Logo] Alphast    [BTC] [ETH] [Health]│  <- Top nav
 ├─────────────────────────────────────────────────┤
 │                                                  │
 │  Page Content (see below per page)               │

@@ -41,7 +41,7 @@ EXECUTION_DURATION = Histogram("execution_duration_seconds", "Trade execution du
 CONSECUTIVE_ERRORS = Gauge("consecutive_poll_errors", "Consecutive poll errors")
 TRADES_TOTAL = Counter("trades_total", "Total trades executed", ["symbol", "status"])
 DB_SIZE_BYTES = Gauge("db_size_bytes", "SQLite database file size")
-APP_INFO = Info("spread_dashboard", "Spread Dashboard application info")
+APP_INFO = Info("alphast", "Alphast application info")
 APP_INFO.info({"version": "0.1.0"})
 
 

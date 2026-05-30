@@ -1,4 +1,4 @@
-# Production Deployment — Spread Dashboard
+# Production Deployment — Alphast
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Internet → Cloudflare (SSL/proxy) → Hetzner VPS (5.223.65.230)
                           └───────────┬───────────┘
                                       │  host.docker.internal:3000
                           ┌───────────┴───────────┐
-                          │  frontend (nginx)      │  ← ~/spread-dashboard
+                          │  frontend (nginx)      │  ← ~/alphast
                           │  127.0.0.1:3000 → :80  │
                           │  Static files + proxy  │
                           └───────────┬───────────┘
@@ -84,7 +84,7 @@ docker compose up -d
 ### Step 2: Pull and rebuild the app
 
 ```bash
-cd ~/spread-dashboard
+cd ~/alphast
 git fetch --all
 git reset --hard origin/main
 
@@ -93,7 +93,7 @@ mkdir -p backend/data
 chmod 700 backend/data
 
 # Ensure .env exists with CORS_ORIGINS
-grep -q CORS_ORIGINS backend/.env || echo 'CORS_ORIGINS=https://dash.firstyjps.com' >> backend/.env
+grep -q CORS_ORIGINS backend/.env || echo 'CORS_ORIGINS=https://alphast.xyz' >> backend/.env
 
 # Build and start
 docker compose up -d --build
@@ -113,7 +113,7 @@ ssh -i ~/.ssh/hetzner_ed25519 -L 8081:127.0.0.1:81 deploy@5.223.65.230
 # Open: http://127.0.0.1:8081
 ```
 
-**Edit the `dash.firstyjps.com` proxy host:**
+**Edit the `alphast.xyz` proxy host:**
 
 | Field | Value |
 |-------|-------|
@@ -161,11 +161,11 @@ docker ps --format "table {{.Names}}\t{{.Ports}}"
 # On your Mac:
 
 # 6. Public HTTPS works
-curl -I https://dash.firstyjps.com
+curl -I https://alphast.xyz
 # Expected: HTTP/2 200
 
 # 7. API through public URL
-curl -s https://dash.firstyjps.com/api/v1/health
+curl -s https://alphast.xyz/api/v1/health
 # Expected: {"status":"ok",...}
 
 # 8. WebSocket test (brief connect)
@@ -173,7 +173,7 @@ curl -s -o /dev/null -w "%{http_code}" \
   -H "Upgrade: websocket" -H "Connection: Upgrade" \
   -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
   -H "Sec-WebSocket-Version: 13" \
-  https://dash.firstyjps.com/ws
+  https://alphast.xyz/ws
 # Expected: 101 (switching protocols) or connection upgrade
 ```
 
@@ -184,7 +184,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 If something breaks after deployment:
 
 ```bash
-cd ~/spread-dashboard
+cd ~/alphast
 
 # Revert to previous commit
 git log --oneline -5           # find the last working commit
@@ -209,7 +209,7 @@ If NPM config was changed and is broken:
 
 ### View logs
 ```bash
-cd ~/spread-dashboard
+cd ~/alphast
 docker compose logs -f backend
 docker compose logs -f frontend
 docker compose logs --tail=100 backend
@@ -229,7 +229,7 @@ GitHub Actions auto-deploys on push to `main`:
 
 ### Manual update
 ```bash
-cd ~/spread-dashboard
+cd ~/alphast
 git pull origin main
 docker compose up -d --build
 ```
@@ -244,10 +244,10 @@ ssh -i ~/.ssh/hetzner_ed25519 -L 8081:127.0.0.1:81 deploy@5.223.65.230
 ### Database backup
 ```bash
 # One-off backup
-~/spread-dashboard/scripts/backup_db.sh
+~/alphast/scripts/backup_db.sh
 
 # Daily 03:00 server-time backup via cron
-(crontab -l 2>/dev/null; echo "0 3 * * * /home/deploy/spread-dashboard/scripts/backup_db.sh") | crontab -
+(crontab -l 2>/dev/null; echo "0 3 * * * /home/deploy/alphast/scripts/backup_db.sh") | crontab -
 ```
 
 ---
@@ -271,6 +271,6 @@ ssh -i ~/.ssh/hetzner_ed25519 -L 8081:127.0.0.1:81 deploy@5.223.65.230
 
 ### Recommended
 - [ ] Lock SSH to your IP in Hetzner firewall
-- [ ] `chmod 600 ~/spread-dashboard/backend/.env`
+- [ ] `chmod 600 ~/alphast/backend/.env`
 - [ ] Disable root SSH: `PermitRootLogin no` in sshd_config
 - [ ] Install fail2ban: `sudo apt install fail2ban && sudo systemctl enable fail2ban`

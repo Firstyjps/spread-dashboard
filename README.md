@@ -1,4 +1,4 @@
-# Spread Dashboard
+# Alphast
 
 Real-time cross-exchange spread monitoring and execution tool for **Bybit** (CEX) vs **Lighter** (DEX) arbitrage.
 

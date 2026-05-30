@@ -19,9 +19,8 @@ interface Props {
 }
 
 const TIME_RANGES = [
-  { label: '1h', minutes: 60, isDefault: false },
-  { label: '4h', minutes: 240, isDefault: true },
-  { label: '24h', minutes: 1440, isDefault: false },
+  { label: '4h', minutes: 240, isDefault: false },
+  { label: '24h', minutes: 1440, isDefault: true },
   { label: '7d', minutes: 10080, isDefault: false },
 ] as const;
 
@@ -31,7 +30,7 @@ const MAX_CHART_POINTS = 1000;
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 
 const CHART_MARGIN = { top: 10, right: 10, bottom: 5, left: 0 };
-const AXIS_TICK = { fill: '#8c8c94', fontSize: 9, fontFamily: 'Geist Mono' };
+const AXIS_TICK = { fill: '#8c8c94', fontSize: 9, fontFamily: 'Manrope' };
 const Y_DOMAIN: [string, string] = ['auto', 'auto'];
 const MOBILE_QUERY = '(max-width: 639px)';
 
@@ -40,13 +39,13 @@ const TOOLTIP_CONTENT_STYLE = {
   border: '1px solid #2a2a2f',
   borderRadius: 6,
   fontSize: 11,
-  fontFamily: 'Geist Mono',
+  fontFamily: 'Manrope',
   color: '#ededed',
   boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
 };
 
 export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
-  const [selectedRange, setSelectedRange] = useState<TimeRange>(TIME_RANGES[1]); // default 4h
+  const [selectedRange, setSelectedRange] = useState<TimeRange>(TIME_RANGES[1]); // default 24h
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(MOBILE_QUERY).matches : false
@@ -234,7 +233,7 @@ export const SpreadChart = React.memo(function SpreadChart({ symbol }: Props) {
                   <Legend
                     wrapperStyle={{
                       fontSize: 9,
-                      fontFamily: 'Geist Mono',
+                      fontFamily: 'Manrope',
                       fontWeight: 'bold',
                       paddingTop: 8,
                       cursor: 'pointer',
