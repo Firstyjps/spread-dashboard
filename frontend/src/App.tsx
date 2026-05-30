@@ -16,7 +16,7 @@ const PageFallback = () => (
   <div className="flex items-center justify-center py-20 text-gray-500 text-sm">Loading…</div>
 );
 
-type Page = 'overview' | 'portfolio' | 'trades' | 'history' | 'health';
+type Page = 'overview' | 'portfolio' | 'trades' | 'history' | 'health' | 'settings';
 
 // Flush buffered WS data to React state at this rate (~4fps)
 const WS_FLUSH_INTERVAL_MS = 250;
