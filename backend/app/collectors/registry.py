@@ -31,7 +31,6 @@ class ExchangeRegistry:
         return [
             (exchange_a, symbol_a, exchange_b, symbol_b)
             for (exchange_a, symbol_a), (exchange_b, symbol_b) in permutations(entries, 2)
-            if exchange_a != exchange_b
         ]
 
     def get_group_entries(self, asset_group: str = "gold") -> List[MonitorEntry]:
@@ -48,6 +47,21 @@ class ExchangeRegistry:
         if tick_b.mid <= 0:
             raise ValueError("tick_b.mid must be positive")
         return (tick_a.mid - tick_b.mid) / tick_b.mid * 10000
+
+    def compute_buy_spread(self, lighter_tick: NormalizedTick, other_tick: NormalizedTick) -> float:
+        """Buy Lighter, sell other: (other_bid - lighter_ask) / lighter_ask in bps."""
+        if lighter_tick.ask <= 0:
+            raise ValueError("lighter_tick.ask must be positive")
+        return (other_tick.bid - lighter_tick.ask) / lighter_tick.ask * 10000
+
+    def compute_sell_spread(self, lighter_tick: NormalizedTick, other_tick: NormalizedTick) -> float:
+        """Sell Lighter, buy other: (lighter_bid - other_ask) / other_ask in bps."""
+        if other_tick.ask <= 0:
+            raise ValueError("other_tick.ask must be positive")
+        return (lighter_tick.bid - other_tick.ask) / other_tick.ask * 10000
+
+    def compute_net_spread(self, spread_bps: float, fee_a: float, fee_b: float) -> float:
+        return spread_bps - (fee_a + fee_b) * 10000
 
     def pair_id(self, exchange_a: str, symbol_a: str, exchange_b: str, symbol_b: str) -> str:
         return f"{exchange_a}:{symbol_a}-{exchange_b}:{symbol_b}"

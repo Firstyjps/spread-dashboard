@@ -125,7 +125,7 @@ class Settings(BaseSettings):
     # Cross-exchange symbol aliases (format: "DASHBOARD_SYM:LIGHTER_SYM,...")
     # When symbols differ between exchanges, map dashboard symbol to Lighter symbol
     # e.g., "XAUTUSDT:XAUUSDT" means: dashboard uses XAUTUSDT, Lighter uses XAUUSDT (market: XAU)
-    lighter_symbol_map: str = "XAUTUSDT:XAUUSDT"
+    lighter_symbol_map: str = "XAUTUSDT:XAUUSDT,XAU:XAUUSDT"
 
     @property
     def symbol_list(self) -> List[str]:

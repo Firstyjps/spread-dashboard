@@ -23,6 +23,10 @@ class GrvtCollector(ExchangeAdapter):
     def supported_symbols(self) -> list[str]:
         return self._symbols
 
+    @property
+    def fee_taker(self) -> float:
+        return 0.0005
+
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=5)

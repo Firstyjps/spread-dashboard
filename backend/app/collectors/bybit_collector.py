@@ -173,6 +173,14 @@ class BybitCollector(ExchangeAdapter):
     name = "bybit"
 
     @property
+    def fee_maker(self) -> float:
+        return 0.0002
+
+    @property
+    def fee_taker(self) -> float:
+        return 0.00055
+
+    @property
     def supported_symbols(self) -> list[str]:
         symbols = set(settings.symbol_list)
         symbols.add("XAUTUSDT")

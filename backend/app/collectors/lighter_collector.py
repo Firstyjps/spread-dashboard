@@ -457,7 +457,9 @@ class LighterCollector(ExchangeAdapter):
     @property
     def supported_symbols(self) -> list[str]:
         symbols = set(SYMBOL_TO_MARKET_ID.keys())
+        symbols.update(settings.lighter_aliases.keys())
         symbols.update(settings.lighter_aliases.values())
+        symbols.add("XAU")
         symbols.add("XAUUSDT")
         return sorted(symbols)
 

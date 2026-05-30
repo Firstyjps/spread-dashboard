@@ -24,3 +24,13 @@ class ExchangeAdapter(ABC):
     @abstractmethod
     def supported_symbols(self) -> list[str]:
         """Return symbols this exchange adapter can fetch."""
+
+    @property
+    def fee_maker(self) -> float:
+        """Maker fee rate (e.g. 0.0002 = 0.02%)."""
+        return 0.0
+
+    @property
+    def fee_taker(self) -> float:
+        """Taker fee rate (e.g. 0.0005 = 0.05%)."""
+        return 0.0
