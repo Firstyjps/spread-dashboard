@@ -198,6 +198,29 @@ export interface MonitorSpreadsResponse {
   pairs: MonitorPair[];
 }
 
+/** A single row from /monitor/history — mirrors the spreads payload plus ts. */
+export interface MonitorHistoryRow {
+  id?: string;
+  ts: number;
+  buy_spread_bps?: number;
+  sell_spread_bps?: number;
+  mid_spread_bps?: number;
+  net_buy_bps?: number;
+  net_sell_bps?: number;
+  best_spread_bps?: number;
+  executable_spread_bps?: number;
+  [key: string]: unknown;
+}
+
+/** GET /api/v1/monitor/history */
+export interface MonitorHistoryResponse {
+  pair: string;
+  minutes: number;
+  timeframe: string;
+  history: MonitorHistoryRow[];
+  count: number;
+}
+
 /** Slim spread point returned by /spreads/history (only 4 columns). */
 export interface SpreadHistoryPoint {
   ts: number;
