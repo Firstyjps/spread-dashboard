@@ -53,6 +53,23 @@ class Settings(BaseSettings):
     )
     monitor_poll_interval_ms: int = 2000
 
+    # Monitor: fee rates per exchange (used for Net spread calculation)
+    # Format: "EXCHANGE:MAKER:TAKER,..." (rates as decimals, e.g. 0.0002 = 0.02%)
+    monitor_fee_rates: str = (
+        "bybit:0.0002:0.00055,"
+        "binance:0.0002:0.0005,"
+        "okx:0.0002:0.0005,"
+        "mexc:0:0.0001,"
+        "lighter:0:0,"
+        "hyperliquid:0.00015:0.00045,"
+        "grvt:0:0.0005,"
+        "aster:0:0.0005"
+    )
+
+    # Monitor: alert threshold (bps) — Telegram alert when best_spread exceeds this
+    monitor_alert_threshold_bps: float = 40.0
+    monitor_alert_cooldown_s: int = 120
+
     # Alert thresholds
     spread_alert_bps: float = 5.0
     stale_feed_timeout_s: int = 10
@@ -172,6 +189,24 @@ class Settings(BaseSettings):
             if ":" in pair:
                 dashboard_sym, lighter_sym = pair.split(":", 1)
                 result[dashboard_sym.strip()] = lighter_sym.strip()
+        return result
+
+    @property
+    def monitor_fees(self) -> Dict[str, Tuple[float, float]]:
+        """Parse MONITOR_FEE_RATES into dict: {exchange: (maker_rate, taker_rate)}."""
+        result = {}
+        if not self.monitor_fee_rates:
+            return result
+        for entry in self.monitor_fee_rates.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            parts = entry.split(":")
+            if len(parts) == 3:
+                try:
+                    result[parts[0].strip()] = (float(parts[1].strip()), float(parts[2].strip()))
+                except ValueError:
+                    continue
         return result
 
     class Config:
