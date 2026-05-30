@@ -129,8 +129,9 @@ export const ExecutionPanel = React.memo(
       setLoading(true);
       try {
         const res = await api.executeArb(symbol, side, amt);
-        addLog(label, amt, 'success', res.detail || 'Executed');
-        if (onTradeExecuted) {
+        const executionStatus = res.status === 'success' ? 'success' : 'failed';
+        addLog(label, amt, executionStatus, res.detail || 'Executed');
+        if (executionStatus === 'success' && onTradeExecuted) {
           onTradeExecuted(`↑ ${label} · ${amt} ${symbol.replace('USDT', '').replace('XAUT', 'XAU')} @ market`);
         }
         fetchPositions();
@@ -508,18 +509,26 @@ export const ExecutionPanel = React.memo(
               {tradeLog.slice(0, 10).map((log, index) => (
                 <div
                   key={`${log.ts}-${index}`}
-                  className="flex items-center justify-between border-b border-bd1/20 pb-0.5 text-fg2"
+                  className="border-b border-bd1/20 pb-1 text-fg2"
+                  title={log.detail}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-fg3">
-                      {new Date(log.ts).toLocaleTimeString(undefined, { hour12: false })}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-fg3 shrink-0">
+                        {new Date(log.ts).toLocaleTimeString(undefined, { hour12: false })}
+                      </span>
+                      <span className="text-fg1 font-bold shrink-0">{log.action}</span>
+                      <span className="text-fg2 font-semibold shrink-0">{log.amount} XAU</span>
+                    </div>
+                    <span className={log.status === 'success' ? 'text-long' : 'text-short'}>
+                      {log.status === 'success' ? 'OK' : 'FAIL'}
                     </span>
-                    <span className="text-fg1 font-bold">{log.action}</span>
-                    <span className="text-fg2 font-semibold">{log.amount} XAU</span>
                   </div>
-                  <span className={log.status === 'success' ? 'text-long' : 'text-short'}>
-                    {log.status === 'success' ? 'OK' : 'FAIL'}
-                  </span>
+                  {log.status === 'failed' && log.detail && (
+                    <div className="mt-0.5 truncate text-[9px] text-short/80">
+                      {log.detail}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

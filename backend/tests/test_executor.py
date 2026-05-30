@@ -71,11 +71,15 @@ def executor_harness(monkeypatch):
     class MockLighterClient:
         next_position = {"amount": 0.0, "is_long": True}
         fail_orders = False
+        preflight_error = None
 
         def __init__(self, _config):
             self.market_orders = []
             self.closed = False
             created["lighter"] = self
+
+        def check_trading_ready(self):
+            return self.preflight_error
 
         async def place_market_order(self, symbol, amount, is_ask, reduce_only=False):
             self.market_orders.append({
@@ -105,6 +109,8 @@ def executor_harness(monkeypatch):
     monkeypatch.setattr(executor_mod, "record_trade", fake_record_trade)
     monkeypatch.setattr(executor_mod, "send_system_alert", fake_system_alert)
     monkeypatch.setattr(executor_mod, "compute_spread", lambda _symbol: None)
+    MockLighterClient.fail_orders = False
+    MockLighterClient.preflight_error = None
 
     yield created, trades, MockBybitClient, MockLighterClient
     circuit_breaker.reset()
@@ -150,6 +156,28 @@ async def test_arb_bybit_aborted(monkeypatch, executor_harness):
     assert bybit_res.status == "aborted"
     assert created["lighter"].market_orders == []
     assert trades[-1].status == "aborted"
+
+
+@pytest.mark.asyncio
+async def test_arb_lighter_preflight_failure_aborts_before_bybit(monkeypatch, executor_harness):
+    created, trades, _, MockLighterClient = executor_harness
+    MockLighterClient.preflight_error = "Lighter API private key does not match registered key"
+
+    async def fake_maker(**_kwargs):
+        raise AssertionError("Bybit maker should not run when Lighter preflight fails")
+
+    monkeypatch.setattr(executor_mod, "smart_execute_maker", fake_maker)
+
+    executor = executor_mod.ArbitrageExecutor(_config())
+    lighter_res, bybit_res = await executor.run_arb("XAUTUSDT", "BUY_LIGHTER_SELL_BYBIT", 1.0)
+
+    assert lighter_res is None
+    assert bybit_res.status == "aborted"
+    assert bybit_res.filled_qty == Decimal("0")
+    assert created["lighter"].market_orders == []
+    assert created["bybit"].market_orders == []
+    assert trades[-1].status == "aborted"
+    assert "Lighter API private key" in trades[-1].detail
 
 
 @pytest.mark.asyncio

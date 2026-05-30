@@ -23,15 +23,32 @@ class LighterClient:
         self.base_url = config.lighter_base_url
         self._session: Optional[aiohttp.ClientSession] = None
 
-        # SignerClient is only usable when private key is configured
-        if config.lighter_private_key:
+        # SignerClient is only usable when an API private key is configured.
+        if getattr(config, "lighter_api_private_key", None):
             self.client = lighter.SignerClient(
                 url=self.base_url,
                 account_index=int(config.lighter_account_index),
-                api_private_keys={int(config.lighter_api_key_index): config.lighter_private_key},
+                api_private_keys={int(config.lighter_api_key_index): config.lighter_api_private_key},
             )
         else:
             self.client = None
+
+    def check_trading_ready(self) -> Optional[str]:
+        if not self.client:
+            return "Lighter signer not configured"
+        try:
+            err = self.client.check_client()
+        except Exception as exc:
+            return f"Lighter signer validation failed: {exc}"
+        if err:
+            if "private key does not match" in str(err):
+                return (
+                    "Lighter API private key does not match the registered key "
+                    f"for account_index={self.config.lighter_account_index} "
+                    f"api_key_index={self.config.lighter_api_key_index}"
+                )
+            return f"Lighter signer validation failed: {str(err)[:240]}"
+        return None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Reuse persistent HTTP session instead of creating per call."""

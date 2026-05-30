@@ -95,6 +95,25 @@ async def test_manual_kill_switch_blocks_orders(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_audit_log_failure_does_not_block_decision(tmp_path, monkeypatch):
+    engine = await _engine(tmp_path, monkeypatch)
+    await _seed_ticks()
+
+    async def fail_audit(_evaluation):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(engine.audit, "log", fail_audit)
+
+    await engine.activate_kill_switch("manual stop")
+    decision = await engine.evaluate_order(_order())
+
+    assert decision.decision == "reject"
+    assert "kill switch active" in decision.reason
+    assert engine.snapshot().last_decision is not None
+    assert engine.snapshot().last_decision["decision"] == "reject"
+
+
+@pytest.mark.asyncio
 async def test_live_rate_limit_queues_then_times_out(tmp_path, monkeypatch):
     engine = await _engine(
         tmp_path,

@@ -274,8 +274,18 @@ class RiskEngine:
     async def _decide_all(self, orders: list[OrderRequest], decision: str, reason: str) -> list[RiskEvaluation]:
         results = [self._build_evaluation(order, decision, reason) for order in orders]
         for evaluation in results:
-            await self.audit.log(evaluation)
-            self._last_decision = evaluation.to_dict()
+            payload = evaluation.to_dict()
+            try:
+                await self.audit.log(evaluation)
+            except Exception as exc:
+                log.warning(
+                    "risk_audit_log_failed",
+                    error=str(exc),
+                    decision=evaluation.decision,
+                    symbol=evaluation.order.symbol,
+                    exchange=evaluation.order.exchange,
+                )
+            self._last_decision = payload
         return results
 
     def _build_evaluation(self, order: OrderRequest, decision: str, reason: str) -> RiskEvaluation:

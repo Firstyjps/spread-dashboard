@@ -15,7 +15,7 @@ from typing import Optional
 from app.collectors.bybit_client import BybitClient
 from app.collectors.lighter_client import LighterClient
 from app.collectors.lighter_collector import MARKET_META
-from app.execution.maker_engine import smart_execute_maker, MakerConfig
+from app.execution.maker_engine import smart_execute_maker, MakerConfig, MakerResult
 from app.alerts.alert_engine import send_system_alert
 from app.analytics.spread_engine import compute_spread
 from app.metrics import EXECUTION_DURATION
@@ -99,6 +99,39 @@ class ArbitrageExecutor:
             else:
                 bybit_side = "Buy"
                 lighter_is_ask = True   # selling on Lighter
+
+            lighter_preflight_error = await asyncio.to_thread(self.lighter.check_trading_ready)
+            if lighter_preflight_error:
+                log.error(
+                    "arb_seq_lighter_preflight_failed",
+                    symbol=symbol,
+                    error=lighter_preflight_error,
+                )
+                bybit_res = MakerResult(
+                    status="aborted",
+                    filled_qty=Decimal("0"),
+                    remaining_qty=Decimal(str(amount)),
+                    avg_price=Decimal("0"),
+                    estimated_fee=Decimal("0"),
+                    detail=lighter_preflight_error,
+                )
+                await self._record_arb_trade(
+                    symbol=symbol,
+                    strategy_side=strategy_side,
+                    bybit_side=bybit_side,
+                    qty_requested=amount,
+                    qty_filled=0.0,
+                    bybit_res=bybit_res,
+                    spread_bps_at_entry=spread_bps_at_entry,
+                    start_ms=start_ms,
+                    status="aborted",
+                    detail=lighter_preflight_error,
+                )
+                failure_counted = True
+                await self._record_execution_failure(
+                    f"Lighter preflight failed for {symbol}: {lighter_preflight_error}"
+                )
+                return [None, bybit_res]
 
             # ── Phase 1: Bybit maker engine ──
             bybit_res = await smart_execute_maker(
