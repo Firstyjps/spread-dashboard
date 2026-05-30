@@ -21,6 +21,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.requests import Request as _StarletteRequest
 from starlette.responses import JSONResponse as _StarletteJSONResponse
 from app.api.routes import router
+from app.api.monitor_routes import router as monitor_router
 from app.portfolio.router import router as portfolio_router
 from app.api.auto_hedge_routes import router as auto_hedge_router
 from app.api.sl_tp_routes import router as sl_tp_router
@@ -319,6 +320,7 @@ app.add_middleware(
 
 # Include REST routes
 app.include_router(router)
+app.include_router(monitor_router)
 app.include_router(portfolio_router)
 app.include_router(auto_hedge_router)
 app.include_router(sl_tp_router)

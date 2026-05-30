@@ -9,6 +9,7 @@ import time
 import structlog
 from typing import Optional, Dict, Any
 
+from app.collectors.base import ExchangeAdapter
 from app.models import NormalizedTick, FundingSnapshot
 from app.config import settings
 from app.metrics import EXCHANGE_LATENCY
@@ -448,3 +449,23 @@ async def fetch_funding_rate(symbol: str) -> Optional[FundingSnapshot]:
     except Exception as e:
         log.error("lighter_funding_parse_error", symbol=symbol, error=str(e))
         return None
+
+
+class LighterCollector(ExchangeAdapter):
+    name = "lighter"
+
+    @property
+    def supported_symbols(self) -> list[str]:
+        symbols = set(SYMBOL_TO_MARKET_ID.keys())
+        symbols.update(settings.lighter_aliases.values())
+        symbols.add("XAUUSDT")
+        return sorted(symbols)
+
+    async def fetch_ticker(self, symbol: str) -> Optional[NormalizedTick]:
+        return await globals()["fetch_ticker"](symbol)
+
+    async def health_check(self) -> Dict[str, Any]:
+        return await globals()["health_check"]()
+
+    async def close(self) -> None:
+        await close_session()

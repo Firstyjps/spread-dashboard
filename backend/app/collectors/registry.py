@@ -31,6 +31,7 @@ class ExchangeRegistry:
         return [
             (exchange_a, symbol_a, exchange_b, symbol_b)
             for (exchange_a, symbol_a), (exchange_b, symbol_b) in permutations(entries, 2)
+            if exchange_a != exchange_b
         ]
 
     def get_group_entries(self, asset_group: str = "gold") -> List[MonitorEntry]:

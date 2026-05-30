@@ -7,6 +7,7 @@ import aiohttp
 import time
 import structlog
 from typing import Optional, Dict, Any
+from app.collectors.base import ExchangeAdapter
 from app.models import NormalizedTick, FundingSnapshot
 from app.config import settings
 from app.metrics import EXCHANGE_LATENCY
@@ -166,3 +167,22 @@ async def fetch_funding_rate(symbol: str) -> Optional[FundingSnapshot]:
         funding_interval_hours=8.0,
         annualized_rate=rate * 1095,  # 365 * 24 / 8
     )
+
+
+class BybitCollector(ExchangeAdapter):
+    name = "bybit"
+
+    @property
+    def supported_symbols(self) -> list[str]:
+        symbols = set(settings.symbol_list)
+        symbols.add("XAUTUSDT")
+        return sorted(symbols)
+
+    async def fetch_ticker(self, symbol: str) -> Optional[NormalizedTick]:
+        return await globals()["fetch_ticker"](symbol, category="linear")
+
+    async def health_check(self) -> Dict[str, Any]:
+        return await globals()["health_check"]()
+
+    async def close(self) -> None:
+        await close_session()
