@@ -5,6 +5,7 @@ from typing import Any
 
 import structlog
 
+from app.alerts.alert_engine import send_system_alert
 from app.collectors.aster_collector import AsterCollector
 from app.collectors.binance_collector import BinanceCollector
 from app.collectors.bybit_collector import BybitCollector
@@ -13,9 +14,13 @@ from app.collectors.hyperliquid_collector import HyperliquidCollector
 from app.collectors.lighter_collector import LighterCollector
 from app.collectors.okx_collector import OkxCollector
 from app.collectors.registry import ExchangeRegistry, MonitorPair
+from app.config import settings
 from app.models import NormalizedTick
 
 log = structlog.get_logger()
+
+# Rate-limit monitor alerts per pair
+_monitor_alert_last_sent: dict[str, float] = {}
 
 
 class MonitorService:
@@ -80,6 +85,8 @@ class MonitorService:
                 self._latest_snapshot = snapshot
                 for row in spread_rows:
                     self._history[row["id"]].append(row)
+            # Check alerts after storing
+            await self._check_monitor_alerts(spread_rows)
         return snapshot
 
     async def get_history(self, pair: str, minutes: int = 60) -> list[dict[str, Any]]:
@@ -96,6 +103,38 @@ class MonitorService:
             *(adapter.close() for adapter in self.registry.adapters.values()),
             return_exceptions=True,
         )
+
+    async def _check_monitor_alerts(self, spread_rows: list[dict[str, Any]]) -> None:
+        """Send Telegram alert if any pair's best spread exceeds threshold."""
+        threshold = settings.monitor_alert_threshold_bps
+        cooldown = settings.monitor_alert_cooldown_s
+        now = time.monotonic()
+
+        for row in spread_rows:
+            best_bps = row.get("best_spread_bps", 0)
+            if best_bps < threshold:
+                continue
+
+            pair_id = row["id"]
+            last_sent = _monitor_alert_last_sent.get(pair_id, 0.0)
+            if now - last_sent < cooldown:
+                continue
+
+            _monitor_alert_last_sent[pair_id] = now
+            direction = row.get("best_direction", "?")
+            msg = (
+                f"📊 Monitor: {pair_id}\n"
+                f"Direction: {direction.upper()} | Spread: {best_bps:.1f} bps\n"
+                f"Threshold: {threshold:.0f} bps"
+            )
+            await send_system_alert(
+                alert_type="monitor_spread",
+                message=msg,
+                severity="info",
+                value=best_bps,
+                threshold=threshold,
+            )
+            log.info("monitor_alert_sent", pair=pair_id, spread_bps=best_bps, direction=direction)
 
     async def _fetch_ticks(self, pairs: list[MonitorPair]) -> dict[tuple[str, str], NormalizedTick]:
         targets = sorted({(ex_a, sym_a) for ex_a, sym_a, _, _ in pairs} | {(ex_b, sym_b) for _, _, ex_b, sym_b in pairs})
