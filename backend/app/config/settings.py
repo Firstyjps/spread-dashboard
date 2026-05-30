@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # Maker Engine (Bybit PostOnly LIMIT execution)
+    # NOTE: maker_allow_market_fallback is used ONLY by /execute/maker_test endpoint.
+    # The arb execution path (/execute) is controlled by arb_maker_only (below)
+    # which forces maker-only regardless of this flag.
     maker_max_time_s: float = 90.0
     maker_reprice_interval_ms: int = 2000
     maker_max_reprices: int = 60
@@ -68,7 +71,9 @@ class Settings(BaseSettings):
     maker_max_deviation_ticks: int = 50
 
     # Arbitrage execution (sequential Bybit-first mode)
-    arb_maker_only: bool = True        # Disable market fallback — maker fees only
+    # arb_maker_only=True overrides maker_allow_market_fallback for the arb path,
+    # ensuring Bybit leg always uses PostOnly LIMIT (maker fees only).
+    arb_maker_only: bool = True
     arb_min_fill_pct: float = 10.0     # Minimum Bybit fill % before executing Lighter
 
     # Iceberg Executor (Bybit GTC LIMIT synthetic iceberg)
