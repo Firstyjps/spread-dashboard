@@ -13,7 +13,7 @@ import {
   Brush,
 } from 'recharts';
 import { api } from '../../services/api';
-import type { SpreadRow, ChartPoint } from '../../types/api';
+import type { SpreadRow, SpreadHistoryPoint, ChartPoint } from '../../types/api';
 
 const MAX_CHART_POINTS = 768;
 const HISTORY_DAYS = 90;
@@ -21,19 +21,19 @@ const HISTORY_DAYS = 90;
 const LINE_KEYS = ['mid_spread', 'long_spread', 'short_spread'] as const;
 
 const CHART_MARGIN = { top: 10, right: 10, bottom: 5, left: 0 };
-const AXIS_TICK = { fill: '#8c8c94', fontSize: 9, fontFamily: 'Geist Mono' };
+const AXIS_TICK = { fill: '#8c8c94', fontSize: 9, fontFamily: 'Manrope' };
 const Y_DOMAIN: [string, string] = ['auto', 'auto'];
 const TOOLTIP_CONTENT_STYLE = {
   backgroundColor: '#111113',
   border: '1px solid #2a2a2f',
   borderRadius: 6,
   fontSize: 11,
-  fontFamily: 'Geist Mono',
+  fontFamily: 'Manrope',
   color: '#ededed',
   boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
 };
 const TOOLTIP_LABEL_STYLE = { color: '#8c8c94' };
-const LEGEND_WRAPPER_STYLE = { fontSize: 9, fontFamily: 'Geist Mono', fontWeight: 'bold', cursor: 'pointer' };
+const LEGEND_WRAPPER_STYLE = { fontSize: 9, fontFamily: 'Manrope', fontWeight: 'bold', cursor: 'pointer' };
 
 export const HistoryPage = React.memo(function HistoryPage() {
   const [symbol] = useState('XAUTUSDT');
@@ -74,9 +74,9 @@ export const HistoryPage = React.memo(function HistoryPage() {
     let rows = history;
     if (rows.length > MAX_CHART_POINTS) {
       const step = Math.ceil(rows.length / MAX_CHART_POINTS);
-      rows = rows.filter((_: SpreadRow, i: number) => i % step === 0);
+      rows = rows.filter((_: SpreadHistoryPoint, i: number) => i % step === 0);
     }
-    return rows.map((row: SpreadRow): ChartPoint & { fullTime: string } => {
+    return rows.map((row: SpreadHistoryPoint): ChartPoint & { fullTime: string } => {
       const d = new Date(row.ts);
       const label = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
       return {

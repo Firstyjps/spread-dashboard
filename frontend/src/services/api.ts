@@ -1,4 +1,15 @@
 // file: frontend/src/services/api.ts
+import type {
+  HealthResponse,
+  SymbolDataMap,
+  SpreadsResponse,
+  SpreadsHistoryResponse,
+  FundingResponse,
+  Alert,
+  TradeRecord,
+  ConfigResponse,
+} from '../types/api';
+
 const BASE = '/api/v1';
 const FETCH_TIMEOUT_MS = 15000;
 const EXECUTE_TIMEOUT_MS = 60000;
@@ -61,8 +72,8 @@ async function postJSON<T>(path: string, body: unknown, timeoutMs = FETCH_TIMEOU
 }
 
 export const api = {
-  health: () => fetchJSON<any>('/health'),
-  prices: () => fetchJSON<any>('/prices'),
+  health: () => fetchJSON<HealthResponse>('/health'),
+  prices: () => fetchJSON<SymbolDataMap>('/prices'),
   spreads: (symbol: string, options?: { limit?: number; minutes?: number }) => {
     const params = new URLSearchParams({ symbol });
     if (options?.minutes != null) {
@@ -70,20 +81,20 @@ export const api = {
     } else {
       params.set('limit', String(options?.limit ?? 500));
     }
-    return fetchJSON<any>(`/spreads?${params}`);
+    return fetchJSON<SpreadsResponse>(`/spreads?${params}`);
   },
   spreadsHistory: (symbol: string, days = 90) => {
     const params = new URLSearchParams({ symbol, days: String(days) });
-    return fetchJSON<any>(`/spreads/history?${params}`);
+    return fetchJSON<SpreadsHistoryResponse>(`/spreads/history?${params}`);
   },
-  funding: () => fetchJSON<any>('/funding'),
-  alerts: (limit = 50) => fetchJSON<any>(`/alerts?limit=${limit}`),
+  funding: () => fetchJSON<FundingResponse>('/funding'),
+  alerts: (limit = 50) => fetchJSON<Alert[]>(`/alerts?limit=${limit}`),
   trades: (symbol?: string, limit = 100) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (symbol) params.set('symbol', symbol);
-    return fetchJSON<any>(`/trades?${params}`, true);
+    return fetchJSON<TradeRecord[]>(`/trades?${params}`, true);
   },
-  config: () => fetchJSON<any>('/config'),
+  config: () => fetchJSON<ConfigResponse>('/config'),
 
   exportCsvUrl: (symbol: string, minutes = 60) =>
     `${BASE}/spreads/export?symbol=${symbol}&minutes=${minutes}`,
@@ -100,13 +111,13 @@ export const api = {
   autoHedgeStatus: () => fetchJSON<any>('/auto-hedge/status'),
   autoHedgeStart: (config: { symbol: string; poll_interval_s: number; min_delta: number }) =>
     postJSON<any>('/auto-hedge/start', config),
-  autoHedgeStop: () => postJSON<any>('/auto-hedge/stop', {}),
+  autoHedgeStop: () => postJSON<{ status: string }>('/auto-hedge/stop', {}),
 
   slTpStatus: () => fetchJSON<any>('/sl-tp/status'),
   slTpStart: (config: { symbol: string; sl_delta: number; tp_delta: number; poll_interval_s?: number }) =>
     postJSON<any>('/sl-tp/start', config),
-  slTpStop: () => postJSON<any>('/sl-tp/stop', {}),
-  slTpReset: () => postJSON<any>('/sl-tp/reset', {}),
+  slTpStop: () => postJSON<{ status: string }>('/sl-tp/stop', {}),
+  slTpReset: () => postJSON<{ status: string }>('/sl-tp/reset', {}),
 
-  reloadConfig: () => postJSON<any>('/reload-config', {}),
+  reloadConfig: () => postJSON<{ status: string; key_changed?: boolean }>('/reload-config', {}),
 };

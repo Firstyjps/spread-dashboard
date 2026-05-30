@@ -108,3 +108,144 @@ export interface ChartPoint {
   long_spread: number;
   short_spread: number;
 }
+
+// ─── API Response Types ─────────────────────────────────────────
+
+/** GET /api/v1/health */
+export interface ExchangeHealth {
+  status: string;
+  latency_ms?: number;
+  error?: string;
+}
+
+export interface HealthResponse {
+  status: string;
+  exchanges: {
+    bybit: ExchangeHealth;
+    lighter: ExchangeHealth;
+  };
+  symbols: string[];
+}
+
+/** GET /api/v1/prices — returns SymbolDataMap directly */
+export type PricesResponse = SymbolDataMap;
+
+/** GET /api/v1/funding */
+export interface FundingEntry {
+  ts: number;
+  exchange: string;
+  symbol: string;
+  funding_rate: number;
+  predicted_rate: number | null;
+  next_funding_time: number | null;
+  funding_interval_hours: number | null;
+  annualized_rate: number | null;
+}
+
+export type FundingResponse = Record<string, {
+  bybit: FundingEntry | null;
+  lighter: FundingEntry | null;
+  funding_diff: number | null;
+}>;
+
+/** GET /api/v1/spreads */
+export interface SpreadsResponse {
+  symbol: string;
+  current: SpreadRow | null;
+  zscore: number | null;
+  net_pnl_bps: number | null;
+  cost_breakdown: Record<string, number> | null;
+  history: SpreadRow[];
+  count: number;
+  stats: {
+    n: number;
+    mean: number | null;
+    std: number | null;
+    p10: number | null;
+    p50: number | null;
+    p90: number | null;
+    min: number | null;
+    max: number | null;
+  };
+}
+
+/** GET /api/v1/spreads/history */
+export interface SpreadsHistoryResponse {
+  symbol: string;
+  days: number;
+  history: SpreadHistoryPoint[];
+  count: number;
+  stats: SpreadsResponse['stats'];
+}
+
+/** Slim spread point returned by /spreads/history (only 4 columns). */
+export interface SpreadHistoryPoint {
+  ts: number;
+  exchange_spread_mid: number;
+  long_spread: number;
+  short_spread: number;
+}
+
+/** GET /api/v1/config */
+export interface ConfigResponse {
+  symbols: string[];
+  poll_interval_ms: number;
+  spread_alert_bps: number;
+  stale_feed_timeout_s: number;
+  latency_warning_ms: number;
+}
+
+/** GET /api/v1/portfolio */
+export interface PositionEntry {
+  exchange: string;
+  symbol: string;
+  side: string;
+  amount: number;
+  entry_price: number;
+  mark_price?: number;
+  unrealised_pnl?: number;
+  leverage?: number;
+}
+
+export interface PortfolioResponse {
+  positions: PositionEntry[];
+  total_unrealised_pnl?: number;
+}
+
+/** POST /api/v1/execute response */
+export interface ExecuteResponse {
+  status: string;
+  detail: string;
+  bybit?: Record<string, unknown>;
+  lighter?: string;
+  matched_qty?: string;
+}
+
+/** GET /api/v1/auto-hedge/status */
+export interface AutoHedgeStatus {
+  running: boolean;
+  symbol: string | null;
+  poll_interval_s: number | null;
+  min_delta: number | null;
+  last_check_ts: number | null;
+  last_hedge_ts: number | null;
+  hedge_count: number;
+}
+
+/** GET /api/v1/sl-tp/status */
+export interface SlTpStatus {
+  running: boolean;
+  symbol: string | null;
+  sl_delta: number | null;
+  tp_delta: number | null;
+  triggered: boolean;
+  trigger_type: string | null;
+  trigger_ts: number | null;
+}
+
+/** WebSocket message envelope */
+export interface WsMessage {
+  type: 'update' | 'snapshot' | 'pong';
+  data?: SymbolDataMap;
+  ts?: number;
+}

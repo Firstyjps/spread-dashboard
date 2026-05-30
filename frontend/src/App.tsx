@@ -2,6 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, getApiKey } from './services/api';
+import type { SymbolDataMap, WsMessage } from './types/api';
 import { useWebSocket } from './hooks/useWebSocket';
 import { OverviewPage } from './components/overview/OverviewPage';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -27,11 +28,11 @@ const WS_FLUSH_INTERVAL_MS = 250;
 export default function App() {
   const { isAuthenticated } = useAuth();
   const [page, setPage] = useState<Page>('overview');
-  const [wsData, setWsData] = useState<any>(null);
+  const [wsData, setWsData] = useState<SymbolDataMap | null>(null);
   const [lastUpdateTs, setLastUpdateTs] = useState<number | null>(null);
 
   // Buffer: WS messages write here without triggering renders
-  const wsBufferRef = useRef<any>(null);
+  const wsBufferRef = useRef<SymbolDataMap | null>(null);
   const wsTsBufferRef = useRef<number | null>(null);
   const hasPendingRef = useRef(false);
 
@@ -48,7 +49,7 @@ export default function App() {
   }, []);
 
   const handleWsMessage = useCallback((msg: unknown) => {
-    const m = msg as { type?: string; data?: Record<string, unknown>; ts?: number };
+    const m = msg as WsMessage;
     if (m.type === 'update' || m.type === 'snapshot') {
       wsBufferRef.current = m.data ?? null;
       wsTsBufferRef.current = typeof m.ts === 'number' ? m.ts : Date.now();
@@ -70,7 +71,7 @@ export default function App() {
     staleTime: 1000,
   });
 
-  const priceData = wsData || restData;
+  const priceData = wsData || restData || null;
 
   if (!isAuthenticated) {
     return <LoginPage />;
