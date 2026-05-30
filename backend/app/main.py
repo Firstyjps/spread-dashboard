@@ -32,6 +32,7 @@ from app.alerts import on_spread_update, close_telegram_session, start_telegram_
 from app.metrics import POLL_CYCLE_DURATION, WS_CLIENTS, CONSECUTIVE_ERRORS
 from app.services.circuit_breaker import circuit_breaker
 from app.services.reconciliation import get_reconciliation_service
+from app.services.monitor import get_monitor_service
 
 log = structlog.get_logger()
 
@@ -39,14 +40,27 @@ log = structlog.get_logger()
 # Maps each WebSocket to its subscribed symbols.
 # None means "subscribe to all" (backward compatible default).
 ws_clients: dict[WebSocket, set[str] | None] = {}
+ws_send_locks: dict[WebSocket, asyncio.Lock] = {}
 
 # --- Background task handles ---
 _poll_task: asyncio.Task | None = None
+_monitor_task: asyncio.Task | None = None
 _bot_task: asyncio.Task | None = None
 _cleanup_task: asyncio.Task | None = None
 
 
 _consecutive_errors = 0
+
+
+async def _send_ws_text(ws: WebSocket, message: str) -> None:
+    lock = ws_send_locks.setdefault(ws, asyncio.Lock())
+    async with lock:
+        await ws.send_text(message)
+
+
+def _remove_ws_client(ws: WebSocket) -> None:
+    ws_clients.pop(ws, None)
+    ws_send_locks.pop(ws, None)
 
 
 async def poll_loop():
@@ -130,15 +144,18 @@ async def poll_loop():
                 for ws, subscribed in list(ws_clients.items()):
                     try:
                         if subscribed is None:
-                            await ws.send_text(all_msg)
+                            await _send_ws_text(ws, all_msg)
                         else:
                             filtered = {s: all_data[s] for s in subscribed if s in all_data}
                             if filtered:
-                                await ws.send_text(json.dumps({"type": "update", "data": filtered, "ts": ts}))
+                                await _send_ws_text(
+                                    ws,
+                                    json.dumps({"type": "update", "data": filtered, "ts": ts}),
+                                )
                     except Exception:
                         disconnected.append(ws)
                 for ws in disconnected:
-                    ws_clients.pop(ws, None)
+                    _remove_ws_client(ws)
 
             # Reset error counter on success
             _consecutive_errors = 0
@@ -182,6 +199,52 @@ async def _supervised_poll_loop():
             await send_system_alert("poll_crash", f"Poll loop crashed: {e}", severity="critical")
             await asyncio.sleep(2)
             log.info("poll_loop_restarting")
+
+
+async def monitor_poll_loop():
+    """Background monitor loop for multi-exchange spread snapshots."""
+    service = get_monitor_service()
+    interval = settings.monitor_poll_interval_ms / 1000.0
+    log.info("monitor_poll_loop_started", interval_s=interval)
+
+    while True:
+        t0 = time.time()
+        try:
+            snapshot = await service.fetch_current_spreads(group="gold", store_history=True)
+            if ws_clients:
+                await _broadcast_monitor_update(snapshot)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("monitor_poll_loop_error", error=str(e))
+
+        elapsed = time.time() - t0
+        await asyncio.sleep(max(0.1, interval - elapsed))
+
+
+async def _supervised_monitor_poll_loop():
+    """Supervisor for monitor_poll_loop."""
+    while True:
+        try:
+            await monitor_poll_loop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("monitor_poll_loop_crashed", error=str(e))
+            await asyncio.sleep(2)
+            log.info("monitor_poll_loop_restarting")
+
+
+async def _broadcast_monitor_update(snapshot: dict) -> None:
+    msg = json.dumps({"type": "monitor_update", "data": snapshot, "ts": snapshot.get("ts")})
+    disconnected = []
+    for ws in list(ws_clients.keys()):
+        try:
+            await _send_ws_text(ws, msg)
+        except Exception:
+            disconnected.append(ws)
+    for ws in disconnected:
+        _remove_ws_client(ws)
 
 
 async def _check_feed_staleness(symbols: list[str]):
@@ -239,8 +302,9 @@ async def lifespan(app: FastAPI):
     lighter_collector.start_market_stats_ws()
 
     # Start background polling with supervision (auto-restart on crash)
-    global _poll_task, _bot_task, _cleanup_task
+    global _poll_task, _monitor_task, _bot_task, _cleanup_task
     _poll_task = asyncio.create_task(_supervised_poll_loop())
+    _monitor_task = asyncio.create_task(_supervised_monitor_poll_loop())
     _cleanup_task = asyncio.create_task(daily_cleanup_loop())
     await get_reconciliation_service().start()
 
@@ -269,6 +333,12 @@ async def lifespan(app: FastAPI):
             await _poll_task
         except asyncio.CancelledError:
             pass
+    if _monitor_task:
+        _monitor_task.cancel()
+        try:
+            await _monitor_task
+        except asyncio.CancelledError:
+            pass
     await get_reconciliation_service().stop()
     # Stop auto-hedge if running
     from app.services.auto_hedge import get_auto_hedge_service
@@ -283,6 +353,7 @@ async def lifespan(app: FastAPI):
 
     # Close persistent HTTP sessions + DB
     await lighter_collector.stop_market_stats_ws()
+    await get_monitor_service().close()
     await bybit_collector.close_session()
     await lighter_collector.close_session()
     await close_telegram_session()
@@ -335,18 +406,19 @@ _PONG_MSG = json.dumps({"type": "pong"})
 async def websocket_endpoint(ws: WebSocket, token: str | None = Query(default=None)):
     await ws.accept()
     ws_clients[ws] = None  # None = subscribed to all (backward compatible)
+    ws_send_locks[ws] = asyncio.Lock()
     WS_CLIENTS.set(len(ws_clients))
     log.info("ws_client_connected", total=len(ws_clients))
     try:
         # Send initial snapshot (all data)
         data = get_all_current_data()
-        await ws.send_text(json.dumps({"type": "snapshot", "data": data, "ts": time.time() * 1000}))
+        await _send_ws_text(ws, json.dumps({"type": "snapshot", "data": data, "ts": time.time() * 1000}))
 
         # Listen for client messages
         while True:
             raw = await ws.receive_text()
             if raw == "ping":
-                await ws.send_text(_PONG_MSG)
+                await _send_ws_text(ws, _PONG_MSG)
                 continue
 
             try:
@@ -368,9 +440,10 @@ async def websocket_endpoint(ws: WebSocket, token: str | None = Query(default=No
                     all_data = get_all_current_data()
                     filtered = {s: all_data[s] for s in current if s in all_data}
                     if filtered:
-                        await ws.send_text(json.dumps({
-                            "type": "snapshot", "data": filtered, "ts": time.time() * 1000
-                        }))
+                        await _send_ws_text(
+                            ws,
+                            json.dumps({"type": "snapshot", "data": filtered, "ts": time.time() * 1000}),
+                        )
 
             elif msg_type == "unsubscribe":
                 symbols = msg.get("symbols", [])
@@ -382,7 +455,7 @@ async def websocket_endpoint(ws: WebSocket, token: str | None = Query(default=No
     except WebSocketDisconnect:
         pass
     finally:
-        ws_clients.pop(ws, None)
+        _remove_ws_client(ws)
         WS_CLIENTS.set(len(ws_clients))
         log.info("ws_client_disconnected", total=len(ws_clients))
 

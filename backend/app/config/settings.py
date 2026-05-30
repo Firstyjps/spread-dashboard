@@ -44,6 +44,7 @@ class Settings(BaseSettings):
         "gold:bybit:XAUTUSDT,binance:XAUTUSDT,lighter:XAUUSDT,"
         "grvt:XAU,grvt:PAXG,aster:XAUUSDT,aster:PAXGUSDT"
     )
+    monitor_poll_interval_ms: int = 2000
 
     # Alert thresholds
     spread_alert_bps: float = 5.0
