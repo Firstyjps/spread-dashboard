@@ -1,90 +1,95 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
-import { PairCard, PairCardProps } from './PairCard';
+import { PairCard } from './PairCard';
 import { SpreadModeToggle, SpreadMode } from './SpreadModeToggle';
 import { PairSelector } from './PairSelector';
+import type { ChartDataPoint } from './SpreadMiniChart';
 
-const MOCK_PAIRS: PairCardProps[] = [
-  {
-    id: 'bybit:XAUTUSDT-lighter:XAU',
-    exchangeA: 'Bybit',
-    symbolA: 'XAUT',
-    exchangeB: 'Lighter',
-    symbolB: 'XAU',
-    currentSpreadBps: 27.3,
-    history: Array.from({ length: 40 }).map((_, i) => ({ ts: Date.now() - (40 - i) * 60000, value: 20 + Math.random() * 10 })),
-  },
-  {
-    id: 'bybit:XAUTUSDT-binance:XAUTUSDT',
-    exchangeA: 'Bybit',
-    symbolA: 'XAUT',
-    exchangeB: 'Binance',
-    symbolB: 'XAUT',
-    currentSpreadBps: 0.8,
-    history: Array.from({ length: 40 }).map((_, i) => ({ ts: Date.now() - (40 - i) * 60000, value: -2 + Math.random() * 5 })),
-  },
-  {
-    id: 'lighter:XAU-grvt:XAU',
-    exchangeA: 'Lighter',
-    symbolA: 'XAU',
-    exchangeB: 'GRVT',
-    symbolB: 'XAU',
-    currentSpreadBps: -0.3,
-    history: Array.from({ length: 40 }).map((_, i) => ({ ts: Date.now() - (40 - i) * 60000, value: Math.random() * 2 - 1 })),
-  },
-];
+type PairHistory = Record<string, ChartDataPoint[]>;
 
-const AVAILABLE_PAIRS = MOCK_PAIRS.map(p => ({
-  id: p.id,
-  label: `${p.exchangeA} ↔ ${p.exchangeB}`
-}));
+const MAX_HISTORY_POINTS = 300; // ~10 min at 2s poll
+
+function getSpreadValue(pair: any, mode: SpreadMode): number {
+  if (mode === 'mid') return pair.mid_spread_bps ?? 0;
+  if (mode === 'net') return pair.net_sell_bps ?? pair.net_buy_bps ?? 0;
+  // executable (default): use sell_spread for Lighter-centric pairs, else best_spread
+  return pair.sell_spread_bps ?? pair.best_spread_bps ?? 0;
+}
 
 export function MonitorPage() {
   const [mode, setMode] = useState<SpreadMode>('executable');
-  const [selectedPairs, setSelectedPairs] = useState<string[]>(MOCK_PAIRS.map(p => p.id));
+  const [selectedPairs, setSelectedPairs] = useState<string[]>([]);
+  const historyRef = useRef<PairHistory>({});
 
-  // Connect to API (will fail if backend is not ready, we fallback to mock data)
   const { data: spreadsData } = useQuery({
     queryKey: ['monitorSpreads'],
     queryFn: () => api.monitorSpreads('gold'),
     refetchInterval: 2000,
-    retry: false, // Don't retry if failing (e.g. backend not ready)
   });
 
-  // Wire data to PairCard grid (fallback to MOCK_PAIRS if no API data)
-  const pairsData = spreadsData?.pairs 
-    ? spreadsData.pairs.map(p => ({
-        id: p.id,
-        exchangeA: p.exchange_a,
-        symbolA: p.symbol_a,
-        exchangeB: p.exchange_b,
-        symbolB: p.symbol_b,
-        currentSpreadBps: mode === 'executable' ? p.executable_spread_bps : p.mid_spread_bps,
-        history: [{ ts: Date.now(), value: mode === 'executable' ? p.executable_spread_bps : p.mid_spread_bps }] // Dummy history for now since API doesn't return full history here
-      }))
-    : MOCK_PAIRS;
+  // Accumulate history from each poll
+  useEffect(() => {
+    if (!spreadsData?.pairs) return;
+    const ts = spreadsData.ts ?? Date.now();
+    for (const pair of spreadsData.pairs) {
+      const value = getSpreadValue(pair, mode);
+      const arr = historyRef.current[pair.id] ?? [];
+      arr.push({ ts, value });
+      if (arr.length > MAX_HISTORY_POINTS) arr.shift();
+      historyRef.current[pair.id] = arr;
+    }
+  }, [spreadsData, mode]);
 
-  const displayedPairs = pairsData.filter(p => selectedPairs.includes(p.id));
+  // Auto-select all pairs on first load
+  useEffect(() => {
+    if (spreadsData?.pairs && selectedPairs.length === 0) {
+      setSelectedPairs(spreadsData.pairs.map((p: any) => p.id));
+    }
+  }, [spreadsData]);
+
+  const pairs = spreadsData?.pairs ?? [];
+  const availablePairs = pairs.map((p: any) => ({
+    id: p.id,
+    label: `${p.exchange_a} ↔ ${p.exchange_b}`,
+  }));
+
+  const displayedPairs = pairs
+    .filter((p: any) => selectedPairs.includes(p.id))
+    .map((p: any) => ({
+      id: p.id,
+      exchangeA: p.exchange_a,
+      symbolA: p.symbol_a,
+      exchangeB: p.exchange_b,
+      symbolB: p.symbol_b,
+      currentSpreadBps: getSpreadValue(p, mode),
+      history: historyRef.current[p.id] ?? [],
+    }));
 
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col h-full gap-4 p-4 sm:p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Monitor</h1>
         <div className="flex items-center gap-3">
           <SpreadModeToggle mode={mode} onChange={setMode} />
-          <PairSelector 
-            availablePairs={AVAILABLE_PAIRS} 
-            selectedPairs={selectedPairs} 
-            onChange={setSelectedPairs} 
+          <PairSelector
+            availablePairs={availablePairs}
+            selectedPairs={selectedPairs}
+            onChange={setSelectedPairs}
           />
         </div>
       </div>
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-min">
-        {displayedPairs.map((pair) => (
-          <PairCard key={pair.id} {...pair} />
-        ))}
-      </div>
+      {pairs.length === 0 ? (
+        <div className="flex items-center justify-center h-64 text-fg3 text-sm">
+          Connecting to exchanges...
+        </div>
+      ) : (
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-min">
+          {displayedPairs.map((pair: any) => (
+            <PairCard key={pair.id} {...pair} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
