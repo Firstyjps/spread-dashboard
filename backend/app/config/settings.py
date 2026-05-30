@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     lighter_api_key_index: int = 0
     lighter_account_index: int = 0
 
+    # Binance Futures
+    binance_futures_base_url: str = "https://fapi.binance.com"
+
     # Database
     db_path: str = "./data/spread_dashboard.db"
 
