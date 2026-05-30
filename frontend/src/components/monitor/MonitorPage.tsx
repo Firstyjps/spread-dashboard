@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PairCard, PairCardProps } from './PairCard';
+import { SpreadModeToggle, SpreadMode } from './SpreadModeToggle';
+import { PairSelector } from './PairSelector';
 
 const MOCK_PAIRS: PairCardProps[] = [
   {
@@ -31,17 +33,32 @@ const MOCK_PAIRS: PairCardProps[] = [
   },
 ];
 
+const AVAILABLE_PAIRS = MOCK_PAIRS.map(p => ({
+  id: p.id,
+  label: `${p.exchangeA} ↔ ${p.exchangeB}`
+}));
+
 export function MonitorPage() {
+  const [mode, setMode] = useState<SpreadMode>('executable');
+  const [selectedPairs, setSelectedPairs] = useState<string[]>(MOCK_PAIRS.map(p => p.id));
+
+  const displayedPairs = MOCK_PAIRS.filter(p => selectedPairs.includes(p.id));
+
   return (
     <div className="flex flex-col h-full gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Monitor</h1>
-        <div className="flex gap-2">
-          {/* Controls will go here */}
+        <div className="flex items-center gap-3">
+          <SpreadModeToggle mode={mode} onChange={setMode} />
+          <PairSelector 
+            availablePairs={AVAILABLE_PAIRS} 
+            selectedPairs={selectedPairs} 
+            onChange={setSelectedPairs} 
+          />
         </div>
       </div>
       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-min">
-        {MOCK_PAIRS.map((pair) => (
+        {displayedPairs.map((pair) => (
           <PairCard key={pair.id} {...pair} />
         ))}
       </div>
