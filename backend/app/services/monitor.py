@@ -12,6 +12,7 @@ from app.collectors.bybit_collector import BybitCollector
 from app.collectors.grvt_collector import GrvtCollector
 from app.collectors.hyperliquid_collector import HyperliquidCollector
 from app.collectors.lighter_collector import LighterCollector
+from app.collectors.mexc_collector import MexcCollector
 from app.collectors.okx_collector import OkxCollector
 from app.collectors.registry import ExchangeRegistry, MonitorPair
 from app.config import settings
@@ -161,6 +162,7 @@ class MonitorService:
             BybitCollector(),
             BinanceCollector(),
             LighterCollector(),
+            MexcCollector(),
             HyperliquidCollector(),
             OkxCollector(),
             GrvtCollector(),

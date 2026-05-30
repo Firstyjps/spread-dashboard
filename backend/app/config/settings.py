@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # OKX Market Data
     okx_base_url: str = "https://www.okx.com"
 
+    # MEXC Contract Market Data
+    mexc_contract_base_url: str = "https://contract.mexc.com"
+
     # Database
     db_path: str = "./data/spread_dashboard.db"
 
@@ -48,7 +51,7 @@ class Settings(BaseSettings):
     # Format: "GROUP_NAME:EXCHANGE:SYMBOL,EXCHANGE:SYMBOL,..."
     monitor_groups: str = (
         "gold:bybit:XAUTUSDT,lighter:XAU,binance:XAUTUSDT,"
-        "hyperliquid:XAU,okx:XAUT-USDT-SWAP,"
+        "mexc:XAUT_USDT,hyperliquid:XAU,okx:XAUT-USDT-SWAP,"
         "grvt:XAU,grvt:PAXG,aster:XAUUSDT,aster:PAXGUSDT"
     )
     monitor_poll_interval_ms: int = 2000
