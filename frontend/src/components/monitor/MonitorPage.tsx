@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../services/api';
 import { PairCard, PairCardProps } from './PairCard';
 import { SpreadModeToggle, SpreadMode } from './SpreadModeToggle';
 import { PairSelector } from './PairSelector';
@@ -42,7 +44,28 @@ export function MonitorPage() {
   const [mode, setMode] = useState<SpreadMode>('executable');
   const [selectedPairs, setSelectedPairs] = useState<string[]>(MOCK_PAIRS.map(p => p.id));
 
-  const displayedPairs = MOCK_PAIRS.filter(p => selectedPairs.includes(p.id));
+  // Connect to API (will fail if backend is not ready, we fallback to mock data)
+  const { data: spreadsData } = useQuery({
+    queryKey: ['monitorSpreads'],
+    queryFn: () => api.monitorSpreads('gold'),
+    refetchInterval: 2000,
+    retry: false, // Don't retry if failing (e.g. backend not ready)
+  });
+
+  // Wire data to PairCard grid (fallback to MOCK_PAIRS if no API data)
+  const pairsData = spreadsData?.pairs 
+    ? spreadsData.pairs.map(p => ({
+        id: p.id,
+        exchangeA: p.exchange_a,
+        symbolA: p.symbol_a,
+        exchangeB: p.exchange_b,
+        symbolB: p.symbol_b,
+        currentSpreadBps: mode === 'executable' ? p.executable_spread_bps : p.mid_spread_bps,
+        history: [{ ts: Date.now(), value: mode === 'executable' ? p.executable_spread_bps : p.mid_spread_bps }] // Dummy history for now since API doesn't return full history here
+      }))
+    : MOCK_PAIRS;
+
+  const displayedPairs = pairsData.filter(p => selectedPairs.includes(p.id));
 
   return (
     <div className="flex flex-col h-full gap-4">

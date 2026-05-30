@@ -178,6 +178,26 @@ export interface SpreadsHistoryResponse {
   stats: SpreadsResponse['stats'];
 }
 
+/** Monitor Types */
+export interface MonitorPair {
+  id: string;
+  exchange_a: string;
+  symbol_a: string;
+  price_a: { bid: number; ask: number; mid: number };
+  exchange_b: string;
+  symbol_b: string;
+  price_b: { bid: number; ask: number; mid: number };
+  executable_spread_bps: number;
+  mid_spread_bps: number;
+  direction: string;
+}
+
+export interface MonitorSpreadsResponse {
+  group: string;
+  ts: number;
+  pairs: MonitorPair[];
+}
+
 /** Slim spread point returned by /spreads/history (only 4 columns). */
 export interface SpreadHistoryPoint {
   ts: number;
@@ -245,7 +265,7 @@ export interface SlTpStatus {
 
 /** WebSocket message envelope */
 export interface WsMessage {
-  type: 'update' | 'snapshot' | 'pong';
-  data?: SymbolDataMap;
+  type: 'update' | 'snapshot' | 'pong' | 'monitor_update';
+  data?: any;
   ts?: number;
 }

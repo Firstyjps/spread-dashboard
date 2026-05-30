@@ -8,6 +8,7 @@ import type {
   Alert,
   TradeRecord,
   ConfigResponse,
+  MonitorSpreadsResponse,
 } from '../types/api';
 
 const BASE = '/api/v1';
@@ -95,6 +96,9 @@ export const api = {
     return fetchJSON<TradeRecord[]>(`/trades?${params}`, true);
   },
   config: () => fetchJSON<ConfigResponse>('/config'),
+  
+  monitorPairs: () => fetchJSON<string[]>('/monitor/pairs'),
+  monitorSpreads: (group = 'gold') => fetchJSON<MonitorSpreadsResponse>(`/monitor/spreads?group=${group}`),
 
   exportCsvUrl: (symbol: string, minutes = 60) =>
     `${BASE}/spreads/export?symbol=${symbol}&minutes=${minutes}`,
