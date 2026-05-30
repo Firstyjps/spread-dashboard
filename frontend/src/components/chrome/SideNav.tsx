@@ -66,6 +66,7 @@ export function SideNav({ currentPage, onPageChange, mobileOpen = false, onMobil
           <div className="px-2 pt-2 pb-1.5 label">Dashboard</div>
           <div className="flex flex-col gap-0.5">
             <SideNavItem icon="LayoutDashboard" label="Overview" pageId="overview" currentPage={currentPage} onClick={onPageChange} />
+            <SideNavItem icon="BarChart3" label="Monitor" pageId="monitor" currentPage={currentPage} onClick={onPageChange} />
             <SideNavItem icon="Wallet" label="Portfolio" pageId="portfolio" currentPage={currentPage} onClick={onPageChange} />
           </div>
 
