@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     # Symbols
     symbols: str = "XAUTUSDT"
 
+    # Monitor: asset groups for multi-exchange spread tracking
+    # Format: "GROUP_NAME:EXCHANGE:SYMBOL,EXCHANGE:SYMBOL,..."
+    monitor_groups: str = (
+        "gold:bybit:XAUTUSDT,binance:XAUTUSDT,lighter:XAUUSDT,"
+        "grvt:XAU,grvt:PAXG,aster:XAUUSDT,aster:PAXGUSDT"
+    )
+
     # Alert thresholds
     spread_alert_bps: float = 5.0
     stale_feed_timeout_s: int = 10
