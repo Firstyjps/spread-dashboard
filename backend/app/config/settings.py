@@ -47,7 +47,8 @@ class Settings(BaseSettings):
     # Monitor: asset groups for multi-exchange spread tracking
     # Format: "GROUP_NAME:EXCHANGE:SYMBOL,EXCHANGE:SYMBOL,..."
     monitor_groups: str = (
-        "gold:bybit:XAUTUSDT,binance:XAUTUSDT,lighter:XAUUSDT,"
+        "gold:bybit:XAUTUSDT,lighter:XAU,binance:XAUTUSDT,"
+        "hyperliquid:XAU,okx:XAUT-USDT-SWAP,"
         "grvt:XAU,grvt:PAXG,aster:XAUUSDT,aster:PAXGUSDT"
     )
     monitor_poll_interval_ms: int = 2000

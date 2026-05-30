@@ -9,7 +9,9 @@ from app.collectors.aster_collector import AsterCollector
 from app.collectors.binance_collector import BinanceCollector
 from app.collectors.bybit_collector import BybitCollector
 from app.collectors.grvt_collector import GrvtCollector
+from app.collectors.hyperliquid_collector import HyperliquidCollector
 from app.collectors.lighter_collector import LighterCollector
+from app.collectors.okx_collector import OkxCollector
 from app.collectors.registry import ExchangeRegistry, MonitorPair
 from app.models import NormalizedTick
 
@@ -49,6 +51,12 @@ class MonitorService:
 
             pair_id = self.registry.pair_id(exchange_a, symbol_a, exchange_b, symbol_b)
             try:
+                spread_payload = self._spread_payload(
+                    exchange_a=exchange_a,
+                    tick_a=tick_a,
+                    exchange_b=exchange_b,
+                    tick_b=tick_b,
+                )
                 row = {
                     "id": pair_id,
                     "exchange_a": exchange_a,
@@ -57,10 +65,9 @@ class MonitorService:
                     "exchange_b": exchange_b,
                     "symbol_b": symbol_b,
                     "price_b": self._price_payload(tick_b),
-                    "executable_spread_bps": round(self.registry.compute_executable_spread(tick_a, tick_b), 4),
                     "mid_spread_bps": round(self.registry.compute_mid_spread(tick_a, tick_b), 4),
-                    "direction": "sell_a_buy_b",
                     "ts": ts,
+                    **spread_payload,
                 }
             except ValueError as exc:
                 log.warning("monitor_spread_compute_error", pair_id=pair_id, error=str(exc))
@@ -115,6 +122,8 @@ class MonitorService:
             BybitCollector(),
             BinanceCollector(),
             LighterCollector(),
+            HyperliquidCollector(),
+            OkxCollector(),
             GrvtCollector(),
             AsterCollector(),
         ):
@@ -123,6 +132,48 @@ class MonitorService:
 
     def _price_payload(self, tick: NormalizedTick) -> dict[str, float]:
         return {"bid": tick.bid, "ask": tick.ask, "mid": tick.mid}
+
+    def _spread_payload(
+        self,
+        exchange_a: str,
+        tick_a: NormalizedTick,
+        exchange_b: str,
+        tick_b: NormalizedTick,
+    ) -> dict[str, Any]:
+        adapter_a = self.registry.adapters[exchange_a]
+        adapter_b = self.registry.adapters[exchange_b]
+
+        if exchange_a == "lighter" or exchange_b == "lighter":
+            lighter_tick = tick_a if exchange_a == "lighter" else tick_b
+            other_tick = tick_b if exchange_a == "lighter" else tick_a
+            buy_spread = self.registry.compute_buy_spread(lighter_tick, other_tick)
+            sell_spread = self.registry.compute_sell_spread(lighter_tick, other_tick)
+            best_direction = "buy" if buy_spread >= sell_spread else "sell"
+            a_to_b_spread = self.registry.compute_executable_spread(tick_a, tick_b)
+            b_to_a_spread = self.registry.compute_executable_spread(tick_b, tick_a)
+        else:
+            a_to_b_spread = self.registry.compute_executable_spread(tick_a, tick_b)
+            b_to_a_spread = self.registry.compute_executable_spread(tick_b, tick_a)
+            buy_spread = a_to_b_spread
+            sell_spread = b_to_a_spread
+            best_direction = "a_to_b" if a_to_b_spread >= b_to_a_spread else "b_to_a"
+
+        net_buy = self.registry.compute_net_spread(buy_spread, adapter_a.fee_taker, adapter_b.fee_taker)
+        net_sell = self.registry.compute_net_spread(sell_spread, adapter_a.fee_taker, adapter_b.fee_taker)
+        best_spread = buy_spread if best_direction in ("buy", "a_to_b") else sell_spread
+
+        return {
+            "buy_spread_bps": round(buy_spread, 4),
+            "sell_spread_bps": round(sell_spread, 4),
+            "net_buy_bps": round(net_buy, 4),
+            "net_sell_bps": round(net_sell, 4),
+            "a_to_b_spread_bps": round(a_to_b_spread, 4),
+            "b_to_a_spread_bps": round(b_to_a_spread, 4),
+            "best_direction": best_direction,
+            "best_spread_bps": round(best_spread, 4),
+            "executable_spread_bps": round(best_spread, 4),
+            "direction": best_direction,
+        }
 
 
 _monitor_service: MonitorService | None = None
