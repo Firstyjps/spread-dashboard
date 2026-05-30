@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Settings2 } from 'lucide-react';
-import { cn } from '../../lib/cn';
 
 interface PairSelectorProps {
-  availablePairs: { id: string; label: string }[];
+  availablePairs: { id: string; label: string; detail?: string }[];
   selectedPairs: string[];
   onChange: (selected: string[]) => void;
 }
@@ -31,16 +30,21 @@ export function PairSelector({ availablePairs, selectedPairs, onChange }: PairSe
       </button>
       
       {open && (
-        <div className="absolute right-0 mt-2 w-56 bg-card border border-bd1 rounded-md shadow-lg p-2 z-10 flex flex-col gap-1">
+        <div className="absolute right-0 mt-2 w-80 bg-card border border-bd1 rounded-md shadow-lg p-2 z-10 flex flex-col gap-1">
           {availablePairs.map((pair) => (
-            <label key={pair.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-bg2 rounded cursor-pointer text-sm text-fg2">
+            <label key={pair.id} className="flex items-start gap-2 px-2 py-1.5 hover:bg-bg2 rounded cursor-pointer text-sm text-fg2">
               <input
                 type="checkbox"
                 checked={selectedPairs.includes(pair.id)}
                 onChange={() => togglePair(pair.id)}
-                className="accent-primary"
+                className="mt-0.5 accent-primary"
               />
-              {pair.label}
+              <span className="min-w-0 flex flex-col">
+                <span className="truncate">{pair.label}</span>
+                {pair.detail ? (
+                  <span className="truncate font-mono text-[11px] text-fg3">{pair.detail}</span>
+                ) : null}
+              </span>
             </label>
           ))}
         </div>

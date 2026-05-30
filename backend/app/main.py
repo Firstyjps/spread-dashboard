@@ -25,6 +25,7 @@ from app.api.monitor_routes import router as monitor_router
 from app.portfolio.router import router as portfolio_router
 from app.api.auto_hedge_routes import router as auto_hedge_router
 from app.api.sl_tp_routes import router as sl_tp_router
+from app.api.risk_routes import router as risk_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data, get_latest_tick
 from app.storage.database import init_db, insert_tick, insert_spread, close_db, commit as db_commit, cleanup_old_data
@@ -33,6 +34,7 @@ from app.metrics import POLL_CYCLE_DURATION, WS_CLIENTS, CONSECUTIVE_ERRORS
 from app.services.circuit_breaker import circuit_breaker
 from app.services.reconciliation import get_reconciliation_service
 from app.services.monitor import get_monitor_service
+from app.risk import get_risk_engine
 
 log = structlog.get_logger()
 
@@ -264,6 +266,11 @@ async def _check_feed_staleness(symbols: list[str]):
                     value=age_s,
                     threshold=circuit_breaker.feed_gap_threshold_s,
                 )
+        try:
+            await get_risk_engine().check_feed_health(symbol)
+            await get_risk_engine().check_spread_inversion(symbol)
+        except Exception as e:
+            log.error("risk_background_check_error", symbol=symbol, error=str(e))
 
 
 
@@ -277,6 +284,7 @@ async def daily_cleanup_loop():
     while True:
         try:
             deleted = await cleanup_old_data(days=settings.data_retention_days)
+            await get_risk_engine().cleanup()
             log.info("daily_cleanup_ran", days=settings.data_retention_days, deleted=deleted)
         except asyncio.CancelledError:
             raise
@@ -291,6 +299,7 @@ async def lifespan(app: FastAPI):
     # Startup
     log.info("app_starting", env=settings.app_env)
     await init_db()
+    await get_risk_engine().initialize()
 
     # Load Lighter market ID mapping
     await lighter_collector.fetch_market_ids()
@@ -395,6 +404,7 @@ app.include_router(monitor_router)
 app.include_router(portfolio_router)
 app.include_router(auto_hedge_router)
 app.include_router(sl_tp_router)
+app.include_router(risk_router)
 
 
 # Pre-serialized static message — avoids json.dumps on every ping

@@ -34,6 +34,7 @@ from app.api.rate_limit import limiter
 from app.metrics import generate_latest, CONTENT_TYPE_LATEST, update_db_size_metric
 from app.services.circuit_breaker import circuit_breaker
 from app.services.reconciliation import get_reconciliation_service
+from app.risk import OrderRequest, get_risk_engine
 
 log = structlog.get_logger()
 
@@ -254,6 +255,50 @@ SIDE_MAP = {
 }
 
 
+def _risk_payload(decisions) -> list[dict]:
+    return [decision.to_dict() for decision in decisions]
+
+
+def _arb_risk_orders(symbol: str, mapped_side: str, amount: float) -> list[OrderRequest]:
+    if mapped_side == "BUY_LIGHTER_SELL_BYBIT":
+        lighter_side = "Buy"
+        bybit_side = "Sell"
+    elif mapped_side == "SELL_LIGHTER_BUY_BYBIT":
+        lighter_side = "Sell"
+        bybit_side = "Buy"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported side: {mapped_side}")
+
+    return [
+        OrderRequest(
+            symbol=symbol,
+            side=bybit_side,
+            qty=amount,
+            price=None,
+            exchange="bybit",
+            order_type="arb_sequential",
+            source="api_execute",
+        ),
+        OrderRequest(
+            symbol=symbol,
+            side=lighter_side,
+            qty=amount,
+            price=None,
+            exchange="lighter",
+            order_type="arb_sequential",
+            source="api_execute",
+        ),
+    ]
+
+
+async def _guard_orders(orders: list[OrderRequest]):
+    decisions = await get_risk_engine().evaluate_orders(orders)
+    rejected = [decision for decision in decisions if decision.decision == "reject"]
+    if rejected:
+        raise HTTPException(status_code=403, detail=f"Risk rejected: {rejected[0].reason}")
+    return decisions
+
+
 # --- Shared clients for read-only endpoints (reused across requests) ---
 # Automatically recreated when API keys change (e.g. account switch).
 _shared_bybit_client: Optional[BybitClient] = None
@@ -374,10 +419,15 @@ def _compute_theoretical_pnl(bybit_pos: dict, lighter_pos: dict, symbol: str) ->
 @router.post("/execute", dependencies=[Depends(require_api_key)])
 @limiter.limit("20/minute")
 async def execute_trade(request: Request, req: TradeRequest):
-    if circuit_breaker.is_tripped:
-        raise HTTPException(status_code=503, detail=circuit_breaker.status())
-
     mapped_side = SIDE_MAP.get(req.side, req.side)
+    risk_orders = _arb_risk_orders(req.symbol, mapped_side, req.amount)
+    risk_decisions = await _guard_orders(risk_orders)
+    if all(decision.decision == "simulate" for decision in risk_decisions):
+        return {
+            "status": "simulated",
+            "detail": f"Dry-run: Sequential Arb for {req.symbol} ({mapped_side}, qty={req.amount})",
+            "risk": _risk_payload(risk_decisions),
+        }
 
     try:
         async with ArbitrageExecutor(settings) as executor:
@@ -389,20 +439,25 @@ async def execute_trade(request: Request, req: TradeRequest):
             if lighter_res is None:
                 bybit_detail = bybit_res.to_dict() if hasattr(bybit_res, "to_dict") else str(bybit_res)
                 status = "aborted" if hasattr(bybit_res, "status") and bybit_res.status == "aborted" else "below_threshold"
+                await get_risk_engine().record_execution_result(risk_orders, success=False, reason=status)
                 return {
                     "status": status,
                     "detail": f"Bybit {status}: {bybit_res.detail if hasattr(bybit_res, 'detail') else 'fill below threshold'}",
                     "bybit": bybit_detail,
+                    "risk": _risk_payload(risk_decisions),
                 }
 
+            await get_risk_engine().record_execution_result(risk_orders, success=True)
             return {
                 "status": "success",
                 "detail": f"Sequential Arb for {req.symbol} ({mapped_side}, qty={req.amount})",
                 "bybit": bybit_res.to_dict() if hasattr(bybit_res, "to_dict") else str(bybit_res),
                 "lighter": str(lighter_res),
                 "matched_qty": str(bybit_res.filled_qty) if hasattr(bybit_res, "filled_qty") else str(req.amount),
+                "risk": _risk_payload(risk_decisions),
             }
     except Exception as e:
+        await get_risk_engine().record_execution_result(risk_orders, success=False, reason=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -413,14 +468,45 @@ class ClosePositionRequest(BaseModel):
 @router.post("/execute/close_all", dependencies=[Depends(require_api_key)])
 @limiter.limit("20/minute")
 async def close_all_positions(request: Request, req: ClosePositionRequest):
-    if circuit_breaker.is_tripped:
-        raise HTTPException(status_code=503, detail=circuit_breaker.status())
+    risk_orders = [
+        OrderRequest(
+            symbol=req.symbol,
+            side="Sell",
+            qty=0.0,
+            price=None,
+            exchange="bybit",
+            order_type="close_all",
+            source="api_close_all",
+            reduce_only=True,
+        ),
+        OrderRequest(
+            symbol=req.symbol,
+            side="Sell",
+            qty=0.0,
+            price=None,
+            exchange="lighter",
+            order_type="close_all",
+            source="api_close_all",
+            reduce_only=True,
+        ),
+    ]
+    risk_decisions = await _guard_orders(risk_orders)
+    if all(decision.decision == "simulate" for decision in risk_decisions):
+        return {
+            "status": "simulated",
+            "detail": f"Dry-run: close all positions for {req.symbol}",
+            "risk": _risk_payload(risk_decisions),
+        }
 
     try:
         async with ArbitrageExecutor(settings) as executor:
             result = await executor.emergency_close_auto(symbol=req.symbol)
+            await get_risk_engine().record_execution_result(risk_orders, success=True)
+            if isinstance(result, dict):
+                result["risk"] = _risk_payload(risk_decisions)
             return result
     except Exception as e:
+        await get_risk_engine().record_execution_result(risk_orders, success=False, reason=str(e))
         log.error("close_all_error", symbol=req.symbol, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -456,6 +542,25 @@ async def test_maker_engine(request: Request, req: MakerTestRequest):
     if req.side not in ("Buy", "Sell"):
         raise HTTPException(status_code=400, detail="side must be 'Buy' or 'Sell'")
 
+    risk_orders = [
+        OrderRequest(
+            symbol=req.symbol,
+            side=req.side,
+            qty=req.qty,
+            price=None,
+            exchange="bybit",
+            order_type="post_only",
+            source="api_maker_test",
+        )
+    ]
+    risk_decisions = await _guard_orders(risk_orders)
+    if all(decision.decision == "simulate" for decision in risk_decisions):
+        return {
+            "status": "simulated",
+            "detail": f"Dry-run: maker test {req.side} {req.qty} {req.symbol}",
+            "risk": _risk_payload(risk_decisions),
+        }
+
     client = BybitClient(settings)
     maker_cfg = MakerConfig(
         max_time_s=settings.maker_max_time_s,
@@ -479,8 +584,12 @@ async def test_maker_engine(request: Request, req: MakerTestRequest):
             target_qty=Decimal(str(req.qty)),
             config=maker_cfg,
         )
-        return result.to_dict()
+        await get_risk_engine().record_execution_result(risk_orders, success=True)
+        payload = result.to_dict()
+        payload["risk"] = _risk_payload(risk_decisions)
+        return payload
     except Exception as e:
+        await get_risk_engine().record_execution_result(risk_orders, success=False, reason=str(e))
         log.error("maker_test_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -539,6 +648,26 @@ async def execute_iceberg_order(request: Request, req: IcebergRequest):
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid urgency: {req.urgency}")
 
+    risk_orders = [
+        OrderRequest(
+            symbol=req.symbol,
+            side=req.side,
+            qty=req.total_qty,
+            price=req.price_limit,
+            exchange="bybit",
+            order_type="iceberg",
+            source="api_iceberg",
+            reduce_only=req.reduce_only,
+        )
+    ]
+    risk_decisions = await _guard_orders(risk_orders)
+    if all(decision.decision == "simulate" for decision in risk_decisions):
+        return {
+            "status": "simulated",
+            "detail": f"Dry-run: iceberg {req.side} {req.total_qty} {req.symbol}",
+            "risk": _risk_payload(risk_decisions),
+        }
+
     client = BybitClient(settings)
     iceberg_cfg = IcebergConfig(
         child_qty=Decimal(str(req.child_qty)),
@@ -567,8 +696,12 @@ async def execute_iceberg_order(request: Request, req: IcebergRequest):
             config=iceberg_cfg,
             rate_limiter=_get_rate_limiter(),
         )
-        return result.to_dict()
+        await get_risk_engine().record_execution_result(risk_orders, success=True)
+        payload = result.to_dict()
+        payload["risk"] = _risk_payload(risk_decisions)
+        return payload
     except Exception as e:
+        await get_risk_engine().record_execution_result(risk_orders, success=False, reason=str(e))
         log.error("iceberg_test_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -589,6 +722,7 @@ async def reload_config(request: Request):
     old_key = settings.bybit_api_key
     reload_settings()
     new_key = settings.bybit_api_key
+    get_risk_engine().reload_from_settings()
 
     # Force-clear cached clients so they recreate on next access
     _shared_bybit_client = None

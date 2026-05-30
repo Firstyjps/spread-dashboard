@@ -20,6 +20,7 @@ const RECENT_PAGES = [
   { label: "Trades", pageId: "trades", description: "Recent order activity" },
   { label: "History", pageId: "history", description: "Historical metrics" },
   { label: "Health", pageId: "health", description: "System and connection health" },
+  { label: "Risk", pageId: "risk", description: "Execution risk controls" },
 ];
 
 export function TopNav({

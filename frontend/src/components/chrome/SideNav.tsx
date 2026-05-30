@@ -14,6 +14,11 @@ type SideNavProps = {
 };
 
 export function SideNav({ currentPage, onPageChange, mobileOpen = false, onMobileClose }: SideNavProps) {
+  function handlePageChange(pageId: string) {
+    onPageChange(pageId);
+    onMobileClose?.();
+  }
+
   useEffect(() => {
     onMobileClose?.();
   }, [currentPage, onMobileClose]);
@@ -65,21 +70,22 @@ export function SideNav({ currentPage, onPageChange, mobileOpen = false, onMobil
         <nav className="px-[24px] flex-1 overflow-y-auto nice-scroll mt-2">
           <div className="px-2 pt-2 pb-1.5 label">Dashboard</div>
           <div className="flex flex-col gap-0.5">
-            <SideNavItem icon="LayoutDashboard" label="Overview" pageId="overview" currentPage={currentPage} onClick={onPageChange} />
-            <SideNavItem icon="Activity" label="Monitor" pageId="monitor" currentPage={currentPage} onClick={onPageChange} />
-            <SideNavItem icon="Wallet" label="Portfolio" pageId="portfolio" currentPage={currentPage} onClick={onPageChange} />
+            <SideNavItem icon="LayoutDashboard" label="Overview" pageId="overview" currentPage={currentPage} onClick={handlePageChange} />
+            <SideNavItem icon="Activity" label="Monitor" pageId="monitor" currentPage={currentPage} onClick={handlePageChange} />
+            <SideNavItem icon="Wallet" label="Portfolio" pageId="portfolio" currentPage={currentPage} onClick={handlePageChange} />
           </div>
 
           <div className="px-2 pt-5 pb-1.5 label">Activity</div>
           <div className="flex flex-col gap-0.5">
-            <SideNavItem icon="ListOrdered" label="Trades" pageId="trades" currentPage={currentPage} onClick={onPageChange} />
-            <SideNavItem icon="History" label="History" pageId="history" currentPage={currentPage} onClick={onPageChange} />
+            <SideNavItem icon="ListOrdered" label="Trades" pageId="trades" currentPage={currentPage} onClick={handlePageChange} />
+            <SideNavItem icon="History" label="History" pageId="history" currentPage={currentPage} onClick={handlePageChange} />
           </div>
 
           <div className="px-2 pt-5 pb-1.5 label">System</div>
           <div className="flex flex-col gap-0.5">
-            <SideNavItem icon="Activity" label="Health" pageId="health" currentPage={currentPage} onClick={onPageChange} />
-            <SideNavItem icon="Settings" label="Settings" pageId="settings" currentPage={currentPage} onClick={onPageChange} />
+            <SideNavItem icon="Activity" label="Health" pageId="health" currentPage={currentPage} onClick={handlePageChange} />
+            <SideNavItem icon="ShieldCheck" label="Risk" pageId="risk" currentPage={currentPage} onClick={handlePageChange} />
+            <SideNavItem icon="Settings" label="Settings" pageId="settings" currentPage={currentPage} onClick={handlePageChange} />
           </div>
 
           <div className="mt-5 border-t border-bd1 pt-4">

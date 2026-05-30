@@ -137,6 +137,23 @@ class Settings(BaseSettings):
     rate_limit_max_tokens: int = 10
     rate_limit_refill_rate: float = 10.0
 
+    # Risk framework (fail-closed execution guard)
+    risk_dry_run_enabled: bool = True
+    risk_max_position_per_symbol: float = 0.1
+    risk_position_limits: str = ""  # format: "SYMBOL:LIMIT,..."
+    risk_max_notional_exposure_usd: float = 10_000.0
+    risk_max_order_rate_per_minute: int = 10
+    risk_rate_limit_queue_timeout_s: float = 30.0
+    risk_price_sanity_band_pct: float = 0.5
+    risk_price_data_max_age_s: float = 2.0
+    risk_kill_switch_loss_threshold_usd: float = 500.0
+    risk_kill_switch_consecutive_failures: int = 3
+    risk_kill_switch_feed_stale_s: float = 30.0
+    risk_kill_switch_spread_inversion_pct: float = 2.0
+    risk_kill_switch_spread_inversion_duration_s: float = 1.0
+    risk_cooldown_minutes: float = 5.0
+    risk_audit_retention_days: int = 90
+
     # LIMIT Slicer (Bybit LINEAR — LIMIT-only sliced execution)
     bybit_testnet: bool = False                # use Bybit testnet API
     exec_slice_default: int = 5                # default number of slices
@@ -210,6 +227,23 @@ class Settings(BaseSettings):
                     result[parts[0].strip()] = (float(parts[1].strip()), float(parts[2].strip()))
                 except ValueError:
                     continue
+        return result
+
+    @property
+    def risk_position_limit_overrides(self) -> Dict[str, float]:
+        """Parse RISK_POSITION_LIMITS into dict: {symbol: limit_qty}."""
+        result: Dict[str, float] = {}
+        if not self.risk_position_limits:
+            return result
+        for entry in self.risk_position_limits.split(","):
+            entry = entry.strip()
+            if not entry or ":" not in entry:
+                continue
+            symbol, limit = entry.split(":", 1)
+            try:
+                result[symbol.strip().upper()] = float(limit.strip())
+            except ValueError:
+                continue
         return result
 
     class Config:
