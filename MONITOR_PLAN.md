@@ -66,8 +66,7 @@ spread = (bid_A - ask_B) / ask_B × 10000 bps
 | 5 | **OKX** | CEX | XAUTUSDT | 50x | 0.02%/0.05% | REST+WS | 🟢 Tier 1 |
 | 6 | **GRVT** | DEX | XAU, PAXG | 25x/50x | ~0%/0.05% | REST+WS | 🟡 Tier 2 |
 | 7 | **Aster** | DEX | XAUUSDT, PAXGUSDT | 100x/50x | TBD | REST | 🟡 Tier 2 |
-| 8 | **KuCoin** | CEX | XAUTUSDT | 50x | 0.02%/0.06% | REST+WS | 🟡 Tier 2 |
-| 9 | **MEXC** | CEX | XAUTUSDT | 50x | 0%/0.01% (promo) | REST+WS | 🟡 Tier 2 |
+| 8 | **MEXC** | CEX | XAUTUSDT | 50x | 0%/0.01% (promo) | REST+WS | 🟡 Tier 2 |
 
 ### Pair Matrix — Tier 1 (ทำก่อน, spread กว้าง + volume ดี)
 
@@ -89,8 +88,7 @@ spread = (bid_A - ask_B) / ask_B × 10000 bps
 | 9 | GRVT XAU ↔ GRVT PAXG | ~26 bps | **intra-exchange** cross-asset |
 | 10 | Aster XAU ↔ Aster PAXG | ~18 bps | intra-exchange cross-asset |
 | 11 | Lighter XAU ↔ GRVT PAXG | ~30 bps | cross-exchange + cross-asset |
-| 12 | KuCoin XAUT ↔ Lighter XAU | ~58 bps | CEX เพิ่มเติม |
-| 13 | MEXC XAUT ↔ Lighter XAU | ~60 bps | zero-fee promo |
+| 12 | MEXC XAUT ↔ Lighter XAU | ~60 bps | zero-fee promo |
 
 ### ทำไม DEX ราคาสูงกว่า CEX?
 
