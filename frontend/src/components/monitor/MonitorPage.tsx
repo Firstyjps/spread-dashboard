@@ -13,7 +13,7 @@ const MOCK_PAIRS: PairCardProps[] = [
     exchangeB: 'Lighter',
     symbolB: 'XAU',
     currentSpreadBps: 27.3,
-    history: Array.from({ length: 20 }).map((_, i) => ({ ts: i, value: 20 + Math.random() * 10 })),
+    history: Array.from({ length: 40 }).map((_, i) => ({ ts: Date.now() - (40 - i) * 60000, value: 20 + Math.random() * 10 })),
   },
   {
     id: 'bybit:XAUTUSDT-binance:XAUTUSDT',
@@ -22,7 +22,7 @@ const MOCK_PAIRS: PairCardProps[] = [
     exchangeB: 'Binance',
     symbolB: 'XAUT',
     currentSpreadBps: 0.8,
-    history: Array.from({ length: 20 }).map((_, i) => ({ ts: i, value: -2 + Math.random() * 5 })),
+    history: Array.from({ length: 40 }).map((_, i) => ({ ts: Date.now() - (40 - i) * 60000, value: -2 + Math.random() * 5 })),
   },
   {
     id: 'lighter:XAU-grvt:XAU',
@@ -31,7 +31,7 @@ const MOCK_PAIRS: PairCardProps[] = [
     exchangeB: 'GRVT',
     symbolB: 'XAU',
     currentSpreadBps: -0.3,
-    history: Array.from({ length: 20 }).map((_, i) => ({ ts: i, value: Math.random() * 2 - 1 })),
+    history: Array.from({ length: 40 }).map((_, i) => ({ ts: Date.now() - (40 - i) * 60000, value: Math.random() * 2 - 1 })),
   },
 ];
 
