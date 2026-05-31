@@ -117,6 +117,11 @@ class MonitorService:
                 continue
 
             pair_id = row["id"]
+            
+            # Filter to only alert on bybit and lighter pairs
+            if "bybit" not in pair_id or "lighter" not in pair_id:
+                continue
+                
             last_sent = _monitor_alert_last_sent.get(pair_id, 0.0)
             if now - last_sent < cooldown:
                 continue

@@ -82,7 +82,7 @@ class Settings(BaseSettings):
 
     # Monitor: alert threshold (bps) — Telegram alert when best_spread exceeds this
     monitor_alert_threshold_bps: float = 40.0
-    monitor_alert_cooldown_s: int = 120
+    monitor_alert_cooldown_s: int = 3600
 
     # Alert thresholds
     spread_alert_bps: float = 5.0
