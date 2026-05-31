@@ -19,9 +19,20 @@ class Settings(BaseSettings):
     # Lighter
     lighter_base_url: str = "https://mainnet.zklighter.elliot.ai"
     lighter_ws_url: str = "wss://mainnet.zklighter.elliot.ai/stream"
+    lighter_api_public_key: str = ""
+    lighter_api_private_key: str = ""
     lighter_private_key: str = ""
     lighter_api_key_index: int = 0
     lighter_account_index: int = 0
+
+    # AI Trading Accounts (Overrides manual accounts for AITradingDaemon)
+    ai_bybit_api_key: str = ""
+    ai_bybit_api_secret: str = ""
+    ai_lighter_api_public_key: str = ""
+    ai_lighter_api_private_key: str = ""
+    ai_lighter_private_key: str = ""
+    ai_lighter_api_key_index: int = 0
+    ai_lighter_account_index: int = 0
 
     # Binance Futures
     binance_futures_base_url: str = "https://fapi.binance.com"
@@ -137,6 +148,11 @@ class Settings(BaseSettings):
     rate_limit_max_tokens: int = 10
     rate_limit_refill_rate: float = 10.0
 
+    # AI Execution Config
+    ai_trade_size_usd: float = 10.0
+    ai_max_open_trades: int = 1
+    ai_profit_threshold_bps: float = 12.0
+    
     # Risk framework (fail-closed execution guard)
     risk_dry_run_enabled: bool = True
     risk_max_position_per_symbol: float = 0.1
@@ -247,9 +263,21 @@ class Settings(BaseSettings):
         return result
 
     class Config:
-        env_file = ".env"
+        env_file = (".env", "data/.env")
         env_file_encoding = "utf-8"
 
+
+# Load data/.env into os.environ to ensure UI-updated settings take precedence over container env vars
+data_env_path = "data/.env"
+if os.path.exists(data_env_path):
+    with open(data_env_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line_stripped = line.strip()
+            if not line_stripped or line_stripped.startswith('#'):
+                continue
+            if '=' in line_stripped:
+                key, value = line_stripped.split('=', 1)
+                os.environ[key.strip()] = value.strip()
 
 settings = Settings()
 

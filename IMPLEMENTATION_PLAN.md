@@ -74,7 +74,7 @@
 | eslint + prettier | เพิ่ม linter ฝั่ง frontend |
 | pre-commit hook | รัน `tsc --noEmit` + `ruff` ก่อน commit |
 | Refactor component types | ทำให้ PortfolioPage, HealthPage, ExecutionPanel ใช้ shared types แทน local `any` |
-| Risk framework | เพิ่ม dry-run mode, position/notional limit ตาม DESIGN.md Section D.6 |
+| Risk framework | ✅ DONE: เพิ่ม dry-run mode, position/notional limit (เสร็จสมบูรณ์แล้ว) |
 
 ---
 

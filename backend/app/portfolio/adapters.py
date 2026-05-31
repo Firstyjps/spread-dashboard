@@ -79,6 +79,9 @@ class BybitLinearAdapter:
     # ── Balances ─────────────────────────────────────────────────
 
     async def fetch_balances(self) -> list[NormalizedBalance]:
+        if not self._config.bybit_api_key:
+            return []
+            
         resp = await _retry(
             thread_with_timeout,
             self._session.get_wallet_balance,
@@ -134,6 +137,9 @@ class BybitLinearAdapter:
     # ── Positions ────────────────────────────────────────────────
 
     async def fetch_positions(self) -> list[NormalizedPosition]:
+        if not self._config.bybit_api_key:
+            return []
+            
         resp = await _retry(
             thread_with_timeout,
             self._session.get_positions,
@@ -186,10 +192,20 @@ class LighterAdapter:
     # ── Balances ─────────────────────────────────────────────────
 
     async def fetch_balances(self) -> list[NormalizedBalance]:
+        if not self._config.lighter_private_key:
+            return []
+            
         import aiohttp
+        from eth_account import Account
+        
+        try:
+            wallet_address = Account.from_key(self._config.lighter_private_key).address
+        except (ValueError, Exception) as e:
+            log.warning("lighter_invalid_private_key", error=str(e))
+            return []
 
         url = f"{self._base_url}/api/v1/account"
-        params = {"by": "index", "value": str(self._account_index)}
+        params = {"by": "l1_address", "value": wallet_address}
         ts = int(time.time() * 1000)
 
         async with aiohttp.ClientSession(
@@ -228,10 +244,20 @@ class LighterAdapter:
     # ── Positions ────────────────────────────────────────────────
 
     async def fetch_positions(self) -> list[NormalizedPosition]:
+        if not self._config.lighter_private_key:
+            return []
+            
         import aiohttp
+        from eth_account import Account
+        
+        try:
+            wallet_address = Account.from_key(self._config.lighter_private_key).address
+        except (ValueError, Exception) as e:
+            log.warning("lighter_invalid_private_key", error=str(e))
+            return []
 
         url = f"{self._base_url}/api/v1/account"
-        params = {"by": "index", "value": str(self._account_index)}
+        params = {"by": "l1_address", "value": wallet_address}
         ts = int(time.time() * 1000)
 
         async with aiohttp.ClientSession(

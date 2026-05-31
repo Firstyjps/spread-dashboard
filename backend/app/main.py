@@ -26,6 +26,8 @@ from app.portfolio.router import router as portfolio_router
 from app.api.auto_hedge_routes import router as auto_hedge_router
 from app.api.sl_tp_routes import router as sl_tp_router
 from app.api.risk_routes import router as risk_router
+from app.api.ai_routes import router as ai_router
+from app.api.settings_routes import router as settings_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data, get_latest_tick
 from app.storage.database import init_db, insert_tick, insert_spread, close_db, commit as db_commit, cleanup_old_data
@@ -405,6 +407,8 @@ app.include_router(portfolio_router)
 app.include_router(auto_hedge_router)
 app.include_router(sl_tp_router)
 app.include_router(risk_router)
+app.include_router(ai_router)
+app.include_router(settings_router)
 
 
 # Pre-serialized static message — avoids json.dumps on every ping

@@ -35,9 +35,11 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
 
   // Keep latest onMessage in a ref to avoid reconnect loops
   const onMessageRef = useRef(onMessage);
-  onMessageRef.current = onMessage;
   const autoSubRef = useRef(autoSubscribe);
-  autoSubRef.current = autoSubscribe;
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+    autoSubRef.current = autoSubscribe;
+  }, [onMessage, autoSubscribe]);
 
   const clearTimers = useCallback(() => {
     clearTimeout(reconnectTimer.current);
@@ -153,7 +155,7 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
         retryCount.current += 1;
         backoffMs.current = Math.min(backoffMs.current * 2, MAX_BACKOFF_MS);
 
-        reconnectTimer.current = setTimeout(connect, delay);
+        reconnectTimer.current = setTimeout(() => connect(), delay);
       };
 
       ws.onerror = () => {
@@ -165,9 +167,8 @@ export function useWebSocket({ url, onMessage, autoSubscribe }: UseWebSocketOpti
       const delay = jitter(backoffMs.current);
       retryCount.current += 1;
       backoffMs.current = Math.min(backoffMs.current * 2, MAX_BACKOFF_MS);
-      reconnectTimer.current = setTimeout(connect, delay);
+      reconnectTimer.current = setTimeout(() => connect(), delay);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, startHeartbeat]);
 
   useEffect(() => {

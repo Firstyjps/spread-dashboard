@@ -10,6 +10,8 @@ import type {
   ConfigResponse,
   MonitorSpreadsResponse,
   MonitorHistoryResponse,
+  PortfolioData,
+  PositionsResponse,
 } from '../types/api';
 
 export type MonitorTimeframe = '4h' | '24h' | '7d';
@@ -17,7 +19,7 @@ export type MonitorHistoryBucket = 'raw' | '1m' | '5m' | '15m' | '1h' | '4h';
 
 const BASE = '/api/v1';
 const FETCH_TIMEOUT_MS = 15000;
-const EXECUTE_TIMEOUT_MS = 60000;
+const EXECUTE_TIMEOUT_MS = 120000;
 const KEY_STORAGE = 'spread_api_key';
 
 function withTimeout(ms: number): AbortSignal {
@@ -113,8 +115,9 @@ export const api = {
   exportCsvUrl: (symbol: string, minutes = 60) =>
     `${BASE}/spreads/export?symbol=${symbol}&minutes=${minutes}`,
 
-  portfolio: () => fetchJSON<any>('/portfolio'),
-  positions: (symbol: string) => fetchJSON<any>(`/positions?symbol=${symbol}`),
+  portfolio: (account?: 'manual' | 'ai') => 
+    fetchJSON<PortfolioData>(`/portfolio${account ? `?account=${account}` : ''}`),
+  positions: (symbol: string) => fetchJSON<PositionsResponse>(`/positions?symbol=${symbol}`),
 
   executeArb: (symbol: string, side: 'LONG_LIGHTER' | 'SHORT_LIGHTER', amount: number) =>
     postJSON<any>('/execute', { symbol, side, amount }, EXECUTE_TIMEOUT_MS),
@@ -134,4 +137,11 @@ export const api = {
   slTpReset: () => postJSON<{ status: string }>('/sl-tp/reset', {}),
 
   reloadConfig: () => postJSON<{ status: string; key_changed?: boolean }>('/reload-config', {}),
+  
+  aiStatus: () => fetchJSON<any>('/ai/status'),
+  aiConfig: (config: { is_dry_run?: boolean; trade_size_usd?: number; max_open_trades?: number; profit_threshold_bps?: number }) =>
+    postJSON<any>('/ai/config', config),
+    
+  getApiKeys: () => fetchJSON<any>('/settings/keys'),
+  updateApiKeys: (keys: any) => postJSON<any>('/settings/keys', keys),
 };

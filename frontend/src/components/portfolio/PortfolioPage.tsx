@@ -2,46 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 
-// ─── Types ────────────────────────────────────────────────────
-
-interface NormalizedBalance {
-  exchange: string;
-  currency: string;
-  total_equity: number | null;
-  available: number | null;
-  used_margin: number | null;
-  unrealized_pnl: number | null;
-}
-
-interface NormalizedPosition {
-  exchange: string;
-  symbol: string;
-  side: string;
-  qty: number;
-  entry_price: number | null;
-  mark_price: number | null;
-  unrealized_pnl: number | null;
-  leverage: number | null;
-  liq_price: number | null;
-}
-
-interface ExchangeSnapshot {
-  exchange: string;
-  balances: NormalizedBalance[];
-  positions: NormalizedPosition[];
-  errors: string[];
-}
-
-interface PortfolioData {
-  snapshots: ExchangeSnapshot[];
-  totals: {
-    currency?: string;
-    total_equity?: number;
-    available?: number;
-    used_margin?: number;
-    unrealized_pnl?: number;
-  };
-}
+import { PortfolioData, NormalizedPosition } from '../../types/api';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -80,7 +41,7 @@ function exchangeLabel(name: string): string {
 export const PortfolioPage = React.memo(function PortfolioPage() {
   const { data, isLoading, error } = useQuery<PortfolioData>({
     queryKey: ['portfolio'],
-    queryFn: api.portfolio,
+    queryFn: () => api.portfolio(),
     refetchInterval: 10000,
     staleTime: 8000,
   });
@@ -151,7 +112,6 @@ export const PortfolioPage = React.memo(function PortfolioPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {snapshots.map((snap) => {
           const usdtBal = snap.balances.find((b) => b.currency === 'USDT');
-          const _otherBals = snap.balances.filter((b) => b.currency !== 'USDT');
           const posCount = snap.positions.length;
 
           return (

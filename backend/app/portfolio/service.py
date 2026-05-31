@@ -22,27 +22,47 @@ log = structlog.get_logger()
 _EXCHANGE_TIMEOUT = 20.0
 
 # ── Singleton adapters (lazy init, auto-recreate on key change) ──
-_adapters: dict[str, ExchangeAdapter] | None = None
-_adapters_bybit_key: str = ""
+_adapters_manual: dict[str, ExchangeAdapter] | None = None
+_adapters_ai: dict[str, ExchangeAdapter] | None = None
+_manual_bybit_key: str = ""
+_ai_bybit_key: str = ""
 
+def _get_adapters(account: str = "manual") -> dict[str, ExchangeAdapter]:
+    global _adapters_manual, _adapters_ai, _manual_bybit_key, _ai_bybit_key
+    
+    if account == "ai":
+        if _adapters_ai is None or _ai_bybit_key != settings.ai_bybit_api_key:
+            import copy
+            ai_config = copy.copy(settings)
+            ai_config.bybit_api_key = settings.ai_bybit_api_key
+            ai_config.bybit_api_secret = settings.ai_bybit_api_secret
+            ai_config.lighter_private_key = settings.ai_lighter_private_key
+            ai_config.lighter_account_index = settings.ai_lighter_account_index
+            
+            _adapters_ai = {
+                "bybit": BybitLinearAdapter(ai_config),
+                "lighter": LighterAdapter(ai_config),
+            }
+            _ai_bybit_key = settings.ai_bybit_api_key
+        return _adapters_ai
 
-def _get_adapters() -> dict[str, ExchangeAdapter]:
-    global _adapters, _adapters_bybit_key
-    if _adapters is None or _adapters_bybit_key != settings.bybit_api_key:
-        _adapters = {
+    # Default manual
+    if _adapters_manual is None or _manual_bybit_key != settings.bybit_api_key:
+        _adapters_manual = {
             "bybit": BybitLinearAdapter(settings),
             "lighter": LighterAdapter(settings),
         }
-        _adapters_bybit_key = settings.bybit_api_key
+        _manual_bybit_key = settings.bybit_api_key
         log.info("portfolio_adapters_recreated")
-    return _adapters
-
+    return _adapters_manual
 
 def reset_adapters():
     """Force-clear cached adapters so they recreate on next access."""
-    global _adapters, _adapters_bybit_key
-    _adapters = None
-    _adapters_bybit_key = ""
+    global _adapters_manual, _adapters_ai, _manual_bybit_key, _ai_bybit_key
+    _adapters_manual = None
+    _adapters_ai = None
+    _manual_bybit_key = ""
+    _ai_bybit_key = ""
 
 
 # ── Single-exchange fetch ────────────────────────────────────────
@@ -89,6 +109,7 @@ async def _fetch_one(adapter: ExchangeAdapter) -> ExchangePortfolioSnapshot:
 
 async def fetch_portfolio_snapshot(
     exchanges: list[str] | None = None,
+    account: str = "manual",
 ) -> PortfolioSnapshot:
     """
     Fetch portfolio snapshots from all (or selected) exchanges.
@@ -100,7 +121,7 @@ async def fetch_portfolio_snapshot(
     Returns:
         PortfolioSnapshot with per-exchange snapshots + aggregated totals.
     """
-    all_adapters = _get_adapters()
+    all_adapters = _get_adapters(account)
 
     if exchanges:
         selected = {k: v for k, v in all_adapters.items() if k in exchanges}

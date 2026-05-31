@@ -18,11 +18,14 @@ router = APIRouter(prefix="/api/v1", tags=["portfolio"])
 
 
 @router.get("/portfolio")
-async def get_portfolio(exchange: Optional[str] = Query(None, description="Filter by exchange name")):
+async def get_portfolio(
+    exchange: Optional[str] = Query(None, description="Filter by exchange name"),
+    account: str = Query("manual", description="Account type: 'manual' or 'ai'")
+):
     """Fetch unified portfolio snapshot across all exchanges."""
     try:
         exchanges = [exchange] if exchange else None
-        snapshot = await fetch_portfolio_snapshot(exchanges=exchanges)
+        snapshot = await fetch_portfolio_snapshot(exchanges=exchanges, account=account)
         return snapshot.to_dict()
     except Exception as e:
         log.error("portfolio_endpoint_error", error=str(e))

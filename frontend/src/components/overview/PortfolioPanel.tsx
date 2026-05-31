@@ -73,7 +73,7 @@ function exchangeLabel(name: string): string {
 export const PortfolioPanel = React.memo(function PortfolioPanel() {
   const { data, isLoading, error } = useQuery<PortfolioData>({
     queryKey: ['portfolio'],
-    queryFn: api.portfolio,
+    queryFn: () => api.portfolio(),
     refetchInterval: 10000,
     staleTime: 8000,
   });

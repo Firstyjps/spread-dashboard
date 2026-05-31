@@ -255,6 +255,78 @@ export interface PortfolioResponse {
   total_unrealised_pnl?: number;
 }
 
+export interface NormalizedBalance {
+  exchange: string;
+  currency: string;
+  total_equity: number | null;
+  available: number | null;
+  used_margin: number | null;
+  unrealized_pnl: number | null;
+}
+
+export interface NormalizedPosition {
+  exchange: string;
+  symbol: string;
+  side: string;
+  qty: number;
+  entry_price: number | null;
+  mark_price: number | null;
+  unrealized_pnl: number | null;
+  leverage: number | null;
+  liq_price: number | null;
+}
+
+export interface ExchangeSnapshot {
+  exchange: string;
+  balances: NormalizedBalance[];
+  positions: NormalizedPosition[];
+  errors: string[];
+}
+
+export interface PortfolioData {
+  snapshots: ExchangeSnapshot[];
+  totals: {
+    currency?: string;
+    total_equity?: number;
+    available?: number;
+    used_margin?: number;
+    unrealized_pnl?: number;
+  };
+}
+
+export interface PositionData {
+  amount: number;
+  is_long: boolean;
+  entry_price: number;
+  pnl: number;
+  mark_price?: number;
+  liq_price?: number;
+  leverage?: number;
+  funding_paid?: number;
+  realized_pnl?: number;
+}
+
+export interface ArbFundingData {
+  bybit_rate: number | null;
+  lighter_rate: number | null;
+  lighter_8h: number | null;
+  net_8h_rate: number | null;
+}
+
+export interface TheoreticalData {
+  entry_bps: number | null;
+  current_bps: number | null;
+  diff_bps: number | null;
+  pnl_usd: number | null;
+}
+
+export interface PositionsResponse {
+  bybit: PositionData | null;
+  lighter: PositionData | null;
+  funding?: ArbFundingData | null;
+  theoretical?: TheoreticalData | null;
+}
+
 /** POST /api/v1/execute response */
 export interface ExecuteResponse {
   status: string;

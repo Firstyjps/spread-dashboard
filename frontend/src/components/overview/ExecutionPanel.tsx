@@ -1,36 +1,11 @@
 // file: frontend/src/components/overview/ExecutionPanel.tsx
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { api } from '../../services/api';
+import { PositionData, ArbFundingData, TheoreticalData } from '../../types/api';
 
 interface Props {
   symbol: string;
   onTradeExecuted?: (message: string) => void;
-}
-
-interface PositionData {
-  amount: number;
-  is_long: boolean;
-  entry_price: number;
-  pnl: number;
-  mark_price?: number;
-  liq_price?: number;
-  leverage?: number;
-  funding_paid?: number;
-  realized_pnl?: number;
-}
-
-interface FundingData {
-  bybit_rate: number | null;
-  lighter_rate: number | null;
-  lighter_8h: number | null;
-  net_8h_rate: number | null;
-}
-
-interface TheoreticalData {
-  entry_bps: number | null;
-  current_bps: number | null;
-  diff_bps: number | null;
-  pnl_usd: number | null;
 }
 
 interface TradeLog {
@@ -80,7 +55,7 @@ export const ExecutionPanel = React.memo(
     const [loading, setLoading] = useState(false);
     const [bybitPos, setBybitPos] = useState<PositionData | null>(null);
     const [lighterPos, setLighterPos] = useState<PositionData | null>(null);
-    const [funding, setFunding] = useState<FundingData | null>(null);
+    const [funding, setFunding] = useState<ArbFundingData | null>(null);
     const [theoretical, setTheoretical] = useState<TheoreticalData | null>(null);
     const [tradeLog, setTradeLog] = useState<TradeLog[]>(loadTradeLog);
     const [posError, setPosError] = useState('');

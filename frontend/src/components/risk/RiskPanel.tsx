@@ -163,6 +163,7 @@ export function RiskPanel() {
   const config = configQuery.data?.config ?? statusQuery.data?.config;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (config) setForm(configToForm(config));
   }, [config]);
 

@@ -12,6 +12,7 @@ import {
   Users,
   Wallet,
   Activity,
+  BrainCircuit,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -27,7 +28,8 @@ const ICONS: Record<string, LucideIcon> = {
   Users,
   Key,
   ShieldCheck,
-  Activity
+  Activity,
+  BrainCircuit
 };
 
 type SideNavItemProps = {
