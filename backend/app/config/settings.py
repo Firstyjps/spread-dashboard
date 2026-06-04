@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     maker_reprice_interval_ms: int = 2000
     maker_max_reprices: int = 60
     maker_aggressiveness: str = "BALANCED"
-    maker_allow_market_fallback: bool = True
+    maker_allow_market_fallback: bool = False
     maker_fee_rate: float = 0.0002
     taker_fee_rate: float = 0.00055
     maker_spread_guard_ticks: int = 1
