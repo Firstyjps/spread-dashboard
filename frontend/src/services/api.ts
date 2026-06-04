@@ -138,6 +138,8 @@ export const api = {
 
   reloadConfig: () => postJSON<{ status: string; key_changed?: boolean }>('/reload-config', {}),
   
+  circuitBreakerReset: () => postJSON<any>('/circuit-breaker/reset', {}),
+
   aiStatus: () => fetchJSON<any>('/ai/status'),
   aiConfig: (config: { is_dry_run?: boolean; trade_size_usd?: number; max_open_trades?: number; profit_threshold_bps?: number }) =>
     postJSON<any>('/ai/config', config),

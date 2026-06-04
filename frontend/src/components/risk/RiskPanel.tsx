@@ -7,6 +7,7 @@ import { StatusDot } from '@/components/chrome/StatusDot';
 import { formatNumber, formatUSD } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { riskApi } from '@/services/riskApi';
+import { api } from '@/services/api';
 import type { RiskAuditItem, RiskConfig, RiskDecisionType, RiskRateStatus, RiskStatus } from '@/types/risk';
 
 type RiskConfigForm = {
@@ -208,6 +209,17 @@ export function RiskPanel() {
     },
   });
 
+  const resetCircuitBreaker = useMutation({
+    mutationFn: api.circuitBreakerReset,
+    onSuccess: async () => {
+      setMessage({ text: 'Circuit breaker reset.', tone: 'long' });
+      await invalidateRisk();
+    },
+    onError: (error) => {
+      setMessage({ text: error instanceof Error ? error.message : 'Failed to reset circuit breaker.', tone: 'short' });
+    },
+  });
+
   const status = statusQuery.data;
   const activeTone = riskTone(status);
   const rateUsed = status ? sumRateUsed(status.order_rates) : 0;
@@ -368,7 +380,13 @@ export function RiskPanel() {
               </Button>
               <Button type="button" variant="ghost" disabled={resetKill.isPending} onClick={() => resetKill.mutate()}>
                 {resetKill.isPending ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
-                Reset
+                Reset Kill Switch
+              </Button>
+            </div>
+            <div className="grid grid-cols-1">
+              <Button type="button" variant="ghost" disabled={resetCircuitBreaker.isPending} onClick={() => resetCircuitBreaker.mutate()}>
+                {resetCircuitBreaker.isPending ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                Reset Circuit Breaker
               </Button>
             </div>
             <div className="border-t border-bd1 pt-3 space-y-2">
