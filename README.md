@@ -1,102 +1,267 @@
 # Alphast
 
-Real-time cross-exchange spread monitoring and execution tool for **Bybit** (CEX) vs **Lighter** (DEX) arbitrage.
+Production: https://alphast.xyz
 
-## Features
+Alphast is a real-time spread monitoring, portfolio, risk, and execution dashboard
+for gold perp arbitrage research. The core production pair is **Bybit XAUTUSDT**
+versus **Lighter XAU**, with an expanded monitor for Binance, MEXC, Aster, GRVT,
+Hyperliquid, and OKX.
 
-- **Real-time spread monitoring** — mid, long, short spreads in bps via WebSocket
-- **Arbitrage execution** — one-click BUY L/SELL B and SELL L/BUY B with Smart Maker
-- **Emergency close** — instantly flatten all positions across both exchanges
-- **Funding rate tracking** — Bybit (8h) vs Lighter (1h) with arb favorability
-- **Spread charts** — time-series with P10/P90 percentile bands
-- **Telegram alerts** — configurable threshold notifications
-- **Mobile responsive** — optimized for phone and desktop
+## Current Status
+
+- Local `main`, `origin/main`, and the VPS deployment should track the same commit.
+- Production runs on a Hetzner VPS behind Cloudflare and Nginx Proxy Manager.
+- The public app and API are served from `https://alphast.xyz`.
+- The backend container is expected to be healthy, and the frontend container serves
+  the static React build through nginx.
+
+Quick production checks:
+
+```bash
+curl -fsS https://alphast.xyz/api/v1/health
+curl -fsS https://alphast.xyz/api/v1/prices
+curl -fsS https://alphast.xyz/api/v1/monitor/spreads
+```
+
+## What It Does
+
+- Streams Bybit and Lighter prices over WebSocket.
+- Calculates mid, long, short, executable, and net spreads in bps.
+- Tracks funding rates, spread history, percentiles, and current positions.
+- Shows a multi-exchange monitor for gold perp opportunities.
+- Provides execution controls for manual arbitrage flows.
+- Tracks SL/TP, auto-hedge status, trade journal, and recent alerts.
+- Adds a risk framework with dry-run controls, position limits, notional limits,
+  price sanity checks, rate limits, audit logs, and a kill switch.
+- Includes optional AI/backtest modules for spread research.
+- Sends Telegram alerts for configured spread, monitor, and system events.
 
 ## Architecture
 
-```
-Internet → Cloudflare → Nginx Proxy Manager (443)
-                              │
-                    ┌─────────┴─────────┐
-                    │  frontend (nginx)  │
-                    │  React / Vite      │
-                    └────────┬──────────┘
-                             │ /api/* & /ws
-                    ┌────────┴──────────┐
-                    │  backend (uvicorn) │
-                    │  FastAPI           │
-                    ├───────────────────┤
-                    │ Bybit Collector    │ ← api.bytick.com
-                    │ Lighter Collector  │ ← zklighter.elliot.ai
-                    │ Spread Engine      │
-                    │ Arb Executor       │
-                    │ SQLite             │
-                    └───────────────────┘
+```text
+Internet
+  -> Cloudflare
+  -> Nginx Proxy Manager on VPS
+  -> frontend nginx container
+  -> backend FastAPI container
+  -> SQLite database
+  -> exchange APIs
 ```
 
-## Deployment (Docker)
+Main services:
+
+- `frontend`: React, TypeScript, Vite, Tailwind CSS, Recharts.
+- `backend`: FastAPI, asyncio collectors, SQLite, risk services, execution services.
+- `docker-compose.prod.yml`: production compose file used by the VPS.
+- `scripts/backup_db.sh`: database backup helper.
+
+## Repository Layout
+
+```text
+backend/
+  app/
+    api/          REST routes
+    collectors/   exchange adapters and market data collectors
+    services/     execution, monitor, SL/TP, auto-hedge, reconciliation
+    risk/         risk engine, limits, audit, kill switch
+    storage/      SQLite connection and queries
+    analytics/    spread and cost calculations
+  tests/          backend tests
+
+frontend/
+  src/
+    components/   dashboard pages and UI shell
+    hooks/        WebSocket hook
+    services/     typed API clients
+    types/        frontend API types
+
+docs/
+  DESIGN.md
+  archive/
+
+ios-widget/
+scripts/
+```
+
+## Local Development
+
+### Frontend
 
 ```bash
-# Copy and configure environment
-cp backend/.env.example backend/.env
-nano backend/.env
+cd frontend
+npm ci
+npm run dev
+```
 
-# Build and run
-docker compose -f docker-compose.prod.yml up -d --build
+Vite runs on `http://localhost:5173` and proxies `/api` and `/ws` to the backend.
 
-# View logs
-docker compose -f docker-compose.prod.yml logs -f backend
+Build check:
 
-# Restart (reload .env requires recreate)
-docker compose -f docker-compose.prod.yml up -d
+```bash
+cd frontend
+npm run build
+```
+
+Lint check:
+
+```bash
+cd frontend
+npm run lint
+```
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Run tests from the repository root:
+
+```bash
+PYTHONPATH=backend python -m pytest backend/tests -q
+```
+
+Run lint from the repository root:
+
+```bash
+python -m ruff check backend/app backend/tests
 ```
 
 ## Configuration
 
-Edit `backend/.env`:
+Copy the example env file and edit secrets locally or on the VPS:
 
-```env
-# Symbols to track
-SYMBOLS=XAUTUSDT,HYPEUSDT
-
-# Bybit API (required for execution)
-BYBIT_API_KEY=your_key
-BYBIT_API_SECRET=your_secret
-
-# Lighter API (required for execution)
-LIGHTER_PRIVATE_KEY=0x...
-LIGHTER_API_KEY_INDEX=2
-LIGHTER_ACCOUNT_INDEX=123456
-
-# Telegram alerts
-TELEGRAM_ENABLED=true
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
-ALERT_UPPER_BPS=9
-ALERT_LOWER_BPS=-1
-ALERT_OVERRIDES=XAUTUSDT:75:58
+```bash
+cp backend/.env.example backend/.env
 ```
 
-## API
+Important settings:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/health` | Exchange connectivity |
-| GET | `/api/v1/prices` | Current prices + spreads |
+```env
+APP_ENV=production
+CORS_ORIGINS=https://alphast.xyz
+
+BYBIT_BASE_URL=https://api.bytick.com
+LIGHTER_BASE_URL=https://mainnet.zklighter.elliot.ai
+
+SYMBOLS=XAUTUSDT
+DB_PATH=./data/spread_dashboard.db
+
+TELEGRAM_ENABLED=false
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+MONITOR_GROUPS=gold:bybit:XAUTUSDT,lighter:XAU,binance:XAUTUSDT,mexc:XAUT_USDT,aster:XAUUSDT,aster:PAXGUSDT
+MONITOR_ALERT_THRESHOLD_BPS=40.0
+```
+
+Bybit note: some Thai ISPs block `api.bybit.com`, so this project defaults to
+`api.bytick.com`.
+
+## Production Deployment
+
+The VPS deployment is expected to live in `~/spread-dashboard` and track
+`origin/main`.
+
+Check the deployed commit:
+
+```bash
+ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230 \
+  'cd ~/spread-dashboard && git status --short --branch && git rev-parse --short HEAD'
+```
+
+Deploy the latest `main` manually:
+
+```bash
+ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230
+cd ~/spread-dashboard
+git fetch origin --prune
+git reset --hard origin/main
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml ps
+```
+
+View logs:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail=100 backend
+docker compose -f docker-compose.prod.yml logs --tail=100 frontend
+```
+
+## API Reference
+
+Core:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/health` | Exchange and service health |
+| GET | `/api/v1/prices` | Current prices and spreads |
 | GET | `/api/v1/spreads?symbol=XAUTUSDT&minutes=60` | Spread history |
 | GET | `/api/v1/funding` | Funding rates |
 | GET | `/api/v1/positions?symbol=XAUTUSDT` | Current positions |
-| POST | `/api/v1/execute` | Execute arbitrage trade |
-| POST | `/api/v1/execute/close_all` | Emergency close all |
-| GET | `/api/v1/alerts` | Recent alerts |
-| WS | `/ws` | Real-time price stream |
+| GET | `/api/v1/alerts?limit=20` | Recent alerts |
+| WS | `/ws` | Real-time price and monitor stream |
 
-## Tech Stack
+Execution and operations:
 
-- **Backend**: Python 3.13, FastAPI, uvicorn, SQLite
-- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Recharts
-- **Infra**: Docker Compose, Nginx Proxy Manager, Cloudflare
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/v1/execute` | Execute an arbitrage trade |
+| POST | `/api/v1/execute/close_all` | Emergency close |
+| GET | `/api/v1/trades` | Trade journal |
+| GET | `/api/v1/auto-hedge/status` | Auto-hedge state |
+| GET | `/api/v1/sl-tp/status` | SL/TP state |
 
-## Note
+Monitor and risk:
 
-> `api.bybit.com` is blocked by some Thai ISPs. This project uses `api.bytick.com` (official alternative) by default.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/monitor/pairs` | Configured monitor pairs |
+| GET | `/api/v1/monitor/spreads` | Current multi-exchange spreads |
+| GET | `/api/v1/monitor/history` | Monitor pair history |
+| GET | `/api/v1/risk/status` | Risk engine status |
+| GET | `/api/v1/risk/config` | Risk configuration |
+
+## iOS Widget
+
+The Scriptable widget lives at `scripts/xau-spread-widget.js`.
+
+It should call:
+
+```text
+https://alphast.xyz/api/v1/spreads?symbol=XAUTUSDT&minutes=60
+```
+
+## Useful Checks
+
+Compare local, GitHub, and VPS:
+
+```bash
+git fetch origin --prune
+git status --short --branch
+git rev-parse --short HEAD
+git rev-parse --short origin/main
+
+ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230 \
+  'cd ~/spread-dashboard && git status --short --branch && git rev-parse --short HEAD && git rev-parse --short origin/main'
+```
+
+Check production containers:
+
+```bash
+ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230 \
+  'cd ~/spread-dashboard && docker compose -f docker-compose.prod.yml ps'
+```
+
+## Known Maintenance Notes
+
+- Keep `README.md`, `DEPLOY.md`, and `backend/.env.example` aligned when the public
+  domain changes.
+- Frontend build should pass before deployment.
+- Backend tests require all test dependencies from `backend/requirements.txt`.
+- Monitor pairs may include exchanges that are configured but temporarily missing
+  live data when an external API rejects a symbol or returns no book.

@@ -3,7 +3,7 @@
 // Then add a Scriptable widget to your home screen and select this script.
 //
 // CHANGE THIS to your dashboard URL:
-const API_URL = "https://dash.firstyjps.com/api/v1/spreads?symbol=XAUTUSDT&minutes=60";
+const API_URL = "https://alphast.xyz/api/v1/spreads?symbol=XAUTUSDT&minutes=60";
 
 // --- Fetch data ---
 let data;

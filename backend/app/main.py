@@ -389,7 +389,7 @@ app.add_middleware(SlowAPIMiddleware)
 # CORS - allow frontend dev server (configurable via CORS_ORIGINS env)
 _cors_origins = [
     o.strip()
-    for o in (settings.cors_origins or "https://dash.firstyjps.com,http://localhost:5173,http://127.0.0.1:5173").split(",")
+    for o in (settings.cors_origins or "https://alphast.xyz,http://localhost:5173,http://127.0.0.1:5173").split(",")
     if o.strip()
 ]
 app.add_middleware(
