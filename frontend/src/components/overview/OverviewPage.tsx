@@ -132,7 +132,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
   const bybitAnnualized = bybitFunding != null ? bybitFunding * 3 * 365 : null;
   const lighterAnnualized = lighterFunding != null ? lighterFunding * 24 * 365 : null;
   const netFundingAnnualized = (bybitAnnualized != null && lighterAnnualized != null)
-    ? (bybitAnnualized - lighterAnnualized)
+    ? (lighterAnnualized - bybitAnnualized)
     : null;
 
   // Countdown for next funding
