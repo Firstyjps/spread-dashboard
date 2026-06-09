@@ -215,6 +215,13 @@ async def funding():
     return result
 
 
+@router.get("/funding/history")
+async def funding_history(symbol: str = Query(..., description="Symbol to fetch history for"), limit: int = Query(default=1000, le=5000)):
+    """Historical funding rates from both exchanges."""
+    from app.storage.database import get_funding_history
+    return await get_funding_history(symbol, limit)
+
+
 @router.get("/alerts")
 async def alerts(limit: int = Query(default=50, le=500)):
     """Recent alerts."""

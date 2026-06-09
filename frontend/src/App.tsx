@@ -19,12 +19,13 @@ const SettingsPage = lazy(() => import('./components/settings/SettingsPage').the
 const MonitorPage = lazy(() => import('./components/monitor/MonitorPage').then(m => ({ default: m.MonitorPage })));
 const RiskPanel = lazy(() => import('./components/risk/RiskPanel').then(m => ({ default: m.RiskPanel })));
 const AIPage = lazy(() => import('./components/ai/AIPage').then(m => ({ default: m.AIPage })));
+const FundingPage = lazy(() => import('./components/funding/FundingPage').then(m => ({ default: m.FundingPage })));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center py-20 text-gray-500 text-sm">Loading…</div>
 );
 
-type Page = 'overview' | 'portfolio' | 'trades' | 'history' | 'health' | 'settings' | 'monitor' | 'risk' | 'ai';
+type Page = 'overview' | 'portfolio' | 'trades' | 'history' | 'health' | 'settings' | 'monitor' | 'risk' | 'ai' | 'funding';
 
 // Flush buffered WS data to React state at this rate (~4fps)
 const WS_FLUSH_INTERVAL_MS = 250;
@@ -168,6 +169,15 @@ export default function App() {
             <ErrorBoundary resetKey={page}>
               <Suspense fallback={<PageFallback />}>
                 <AIPage />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
+        )}
+        {page === 'funding' && (
+          <div className="flex-1 flex flex-col min-h-0">
+            <ErrorBoundary resetKey={page}>
+              <Suspense fallback={<PageFallback />}>
+                <FundingPage />
               </Suspense>
             </ErrorBoundary>
           </div>

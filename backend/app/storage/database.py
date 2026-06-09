@@ -129,6 +129,18 @@ async def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_trades_ts ON trades(ts DESC);
         CREATE INDEX IF NOT EXISTS idx_trades_symbol_ts ON trades(symbol, ts DESC);
+
+        CREATE TABLE IF NOT EXISTS funding_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts REAL NOT NULL,
+            symbol TEXT NOT NULL,
+            bybit_funding_rate REAL,
+            lighter_funding_rate REAL,
+            bybit_annualized REAL,
+            lighter_annualized REAL,
+            net_funding_annualized REAL
+        );
+        CREATE INDEX IF NOT EXISTS idx_funding_metrics_symbol_ts ON funding_metrics(symbol, ts DESC);
     """)
     await db.commit()
 
@@ -204,6 +216,25 @@ async def insert_trade(trade: TradeRecord):
          trade.bybit_fill_price, trade.bybit_fee, trade.lighter_fill_price,
          trade.lighter_fee, trade.spread_bps_at_entry, trade.net_pnl_usd,
          trade.duration_ms, trade.status, trade.detail),
+    )
+
+
+async def insert_funding_metric(
+    ts: float,
+    symbol: str,
+    bybit_rate: float | None,
+    lighter_rate: float | None,
+    bybit_ann: float | None,
+    lighter_ann: float | None,
+    net_ann: float | None,
+):
+    db = await _get_db()
+    await db.execute(
+        """INSERT INTO funding_metrics
+           (ts, symbol, bybit_funding_rate, lighter_funding_rate,
+            bybit_annualized, lighter_annualized, net_funding_annualized)
+           VALUES (?,?,?,?,?,?,?)""",
+        (ts, symbol, bybit_rate, lighter_rate, bybit_ann, lighter_ann, net_ann),
     )
 
 
@@ -364,6 +395,22 @@ async def get_recent_trades(symbol: Optional[str] = None, limit: int = 100) -> l
     return [dict(r) for r in rows]
 
 
+async def get_funding_history(symbol: str, limit: int = 1000):
+    db = await _get_db()
+    db.row_factory = aiosqlite.Row
+    cursor = await db.execute(
+        """SELECT id, ts, symbol, bybit_funding_rate, lighter_funding_rate,
+                  bybit_annualized, lighter_annualized, net_funding_annualized
+           FROM funding_metrics
+           WHERE symbol = ?
+           ORDER BY ts ASC
+           LIMIT ?""",
+        (symbol, limit),
+    )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
 # ─── Maintenance ─────────────────────────────────────────────────
 
 async def cleanup_old_data(days: int = 7) -> int:
@@ -375,7 +422,7 @@ async def cleanup_old_data(days: int = 7) -> int:
         db = await _get_db()
         # NOTE: funding_snapshots is currently never written to (no producer wired);
         # /api/v1/funding fetches live each call. Skipping it avoids a wasteful daily DELETE.
-        for table in ["ticks", "spread_metrics", "alerts", "trades"]:
+        for table in ["ticks", "spread_metrics", "alerts", "trades", "funding_metrics"]:
             try:
                 cursor = await db.execute(
                     f"DELETE FROM {table} WHERE ts < ?", (cutoff_ts,)

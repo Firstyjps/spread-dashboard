@@ -30,7 +30,7 @@ from app.api.ai_routes import router as ai_router
 from app.api.settings_routes import router as settings_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data, get_latest_tick
-from app.storage.database import init_db, insert_tick, insert_spread, close_db, commit as db_commit, cleanup_old_data
+from app.storage.database import init_db, insert_tick, insert_spread, insert_funding_metric, close_db, commit as db_commit, cleanup_old_data
 from app.alerts import on_spread_update, close_telegram_session, start_telegram_bot, send_system_alert
 from app.metrics import POLL_CYCLE_DURATION, WS_CLIENTS, CONSECUTIVE_ERRORS
 from app.services.circuit_breaker import circuit_breaker
@@ -51,6 +51,7 @@ _poll_task: asyncio.Task | None = None
 _monitor_task: asyncio.Task | None = None
 _bot_task: asyncio.Task | None = None
 _cleanup_task: asyncio.Task | None = None
+_funding_poll_task: asyncio.Task | None = None
 
 
 _consecutive_errors = 0
@@ -275,6 +276,54 @@ async def _check_feed_staleness(symbols: list[str]):
             log.error("risk_background_check_error", symbol=symbol, error=str(e))
 
 
+async def funding_poll_loop():
+    """Background task: fetch and store funding rates every 15 minutes."""
+    interval = 15 * 60
+    await asyncio.sleep(10)  # Give time for initial startup
+    while True:
+        t0 = time.time()
+        try:
+            ts = time.time() * 1000
+            for symbol in settings.symbol_list:
+                bybit_f = await bybit_collector.fetch_funding_rate(symbol)
+                lighter_f = await lighter_collector.fetch_funding_rate(symbol)
+                
+                b_rate = bybit_f.funding_rate if bybit_f else None
+                l_rate = lighter_f.funding_rate if lighter_f else None
+                
+                b_ann = b_rate * 3 * 365 if b_rate is not None else None
+                l_ann = l_rate * 24 * 365 if l_rate is not None else None
+                net_ann = (l_ann - b_ann) if (b_ann is not None and l_ann is not None) else None
+                
+                await insert_funding_metric(
+                    ts=ts,
+                    symbol=symbol,
+                    bybit_rate=b_rate,
+                    lighter_rate=l_rate,
+                    bybit_ann=b_ann,
+                    lighter_ann=l_ann,
+                    net_ann=net_ann,
+                )
+            await db_commit()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("funding_poll_loop_error", error=str(e))
+        
+        elapsed = time.time() - t0
+        await asyncio.sleep(max(0.1, interval - elapsed))
+
+async def _supervised_funding_poll_loop():
+    """Supervisor for funding_poll_loop."""
+    while True:
+        try:
+            await funding_poll_loop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("funding_poll_loop_crashed", error=str(e))
+            await asyncio.sleep(2)
+            log.info("funding_poll_loop_restarting")
 
 async def daily_cleanup_loop():
     """Background task: prune rows older than settings.data_retention_days every 24h.
@@ -313,10 +362,11 @@ async def lifespan(app: FastAPI):
     lighter_collector.start_market_stats_ws()
 
     # Start background polling with supervision (auto-restart on crash)
-    global _poll_task, _monitor_task, _bot_task, _cleanup_task
+    global _poll_task, _monitor_task, _bot_task, _cleanup_task, _funding_poll_task
     _poll_task = asyncio.create_task(_supervised_poll_loop())
     _monitor_task = asyncio.create_task(_supervised_monitor_poll_loop())
     _cleanup_task = asyncio.create_task(daily_cleanup_loop())
+    _funding_poll_task = asyncio.create_task(_supervised_funding_poll_loop())
     await get_reconciliation_service().start()
 
     # Start Telegram bot command listener
@@ -348,6 +398,12 @@ async def lifespan(app: FastAPI):
         _monitor_task.cancel()
         try:
             await _monitor_task
+        except asyncio.CancelledError:
+            pass
+    if _funding_poll_task:
+        _funding_poll_task.cancel()
+        try:
+            await _funding_poll_task
         except asyncio.CancelledError:
             pass
     await get_reconciliation_service().stop()

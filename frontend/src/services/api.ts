@@ -95,6 +95,10 @@ export const api = {
     return fetchJSON<SpreadsHistoryResponse>(`/spreads/history?${params}`);
   },
   funding: () => fetchJSON<FundingResponse>('/funding'),
+  fundingHistory: (symbol: string, limit = 1000) => {
+    const params = new URLSearchParams({ symbol, limit: String(limit) });
+    return fetchJSON<any>(`/funding/history?${params}`);
+  },
   alerts: (limit = 50) => fetchJSON<Alert[]>(`/alerts?limit=${limit}`),
   trades: (symbol?: string, limit = 100) => {
     const params = new URLSearchParams({ limit: String(limit) });
