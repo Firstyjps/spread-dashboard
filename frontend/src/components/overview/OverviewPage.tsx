@@ -286,6 +286,11 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                   }`}
                 >
                   {bybitAnnualized != null ? `${(bybitAnnualized * 100).toFixed(2)}%` : '—'}
+                  {bybitFunding != null && (
+                    <span className="text-[10px] text-fg3 font-normal ml-1">
+                      ({(bybitFunding * 100).toFixed(4)}%)
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="bg-card border border-bd1 p-2 rounded">
@@ -296,6 +301,11 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
                   }`}
                 >
                   {lighterAnnualized != null ? `${(lighterAnnualized * 100).toFixed(2)}%` : '—'}
+                  {lighterFunding != null && (
+                    <span className="text-[10px] text-fg3 font-normal ml-1">
+                      ({(lighterFunding * 100).toFixed(4)}%)
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
