@@ -217,9 +217,58 @@ async def funding():
 
 @router.get("/funding/history")
 async def funding_history(symbol: str = Query(..., description="Symbol to fetch history for"), limit: int = Query(default=1000, le=5000)):
-    """Historical funding rates from both exchanges."""
+    """Historical funding rates aligned to actual settlement times."""
+    import aiohttp
     from app.storage.database import get_funding_history
-    return await get_funding_history(symbol, limit)
+    from app.config import settings
+    
+    # 1. Fetch Bybit Settlement History
+    bybit_history = []
+    try:
+        url = f"{settings.bybit_base_url}/v5/market/funding/history"
+        params = {"category": "linear", "symbol": symbol, "limit": limit}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("retCode") == 0:
+                        bybit_history = data.get("result", {}).get("list", [])
+    except Exception as e:
+        log.error("bybit_funding_history_error", error=str(e))
+        
+    # 2. Fetch Lighter History from local DB
+    db_history = await get_funding_history(symbol, 1000)
+    
+    merged_history = []
+    for b_item in bybit_history:
+        try:
+            b_ts = int(b_item.get("fundingRateTimestamp", 0))
+            b_rate = float(b_item.get("fundingRate", 0))
+            
+            # Find closest Lighter record within +/- 4 hours
+            l_rate = 0.0
+            closest = None
+            min_diff = float("inf")
+            for row in db_history:
+                diff = abs(row["ts"] - b_ts)
+                if diff < min_diff and diff <= 4 * 3600 * 1000:
+                    closest = row
+                    min_diff = diff
+            
+            if closest:
+                l_rate = closest.get("lighter_rate") or 0.0
+                
+            merged_history.append({
+                "ts": b_ts,
+                "bybit_rate": b_rate,
+                "lighter_rate": l_rate,
+            })
+        except Exception:
+            continue
+            
+    # Sort chronological (ascending)
+    merged_history.sort(key=lambda x: x["ts"])
+    return merged_history
 
 
 @router.get("/alerts")

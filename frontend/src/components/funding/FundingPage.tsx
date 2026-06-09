@@ -16,7 +16,7 @@ function formatDateShort(ts: number) {
 }
 
 export function FundingPage() {
-  const [activeSymbol, setActiveSymbol] = useState<string>('BTCUSDT');
+  const [activeSymbol, setActiveSymbol] = useState<string>('XAUTUSDT');
   const [viewMode, setViewMode] = useState<'normal' | 'apr'>('apr');
   const [historyLimit, setHistoryLimit] = useState<number>(288); // Default to ~3 days if 15m intervals
 
@@ -135,9 +135,9 @@ export function FundingPage() {
               onChange={(e) => setActiveSymbol(e.target.value)}
               className="bg-bg1 border border-border text-fg1 text-sm rounded-md px-3 py-1.5 focus:ring-1 focus:ring-brand focus:border-brand"
             >
-              <option value="BTCUSDT">BTCUSDT</option>
-              <option value="ETHUSDT">ETHUSDT</option>
-              {/* Add more symbols as needed */}
+              {(liveData ? Object.keys(liveData) : ['XAUTUSDT', 'BTCUSDT', 'ETHUSDT']).map(sym => (
+                <option key={sym} value={sym}>{sym}</option>
+              ))}
             </select>
             
             <button onClick={() => refetch()} className="p-1.5 text-fg3 hover:text-brand bg-bg1 border border-border rounded-md transition-colors">
