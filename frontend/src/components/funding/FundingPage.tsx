@@ -5,7 +5,15 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine 
 } from 'recharts';
 import { RefreshCw, Coins } from 'lucide-react';
-import { format } from 'date-fns';
+
+function formatDateShort(ts: number) {
+  const d = new Date(ts);
+  const m = d.toLocaleString('en-US', { month: 'short' });
+  const day = d.getDate().toString().padStart(2, '0');
+  const h = d.getHours().toString().padStart(2, '0');
+  const min = d.getMinutes().toString().padStart(2, '0');
+  return `${m} ${day} ${h}:${min}`;
+}
 
 export function FundingPage() {
   const [activeSymbol, setActiveSymbol] = useState<string>('BTCUSDT');
@@ -53,7 +61,7 @@ export function FundingPage() {
 
     return {
       ts: item.ts,
-      time: format(new Date(item.ts), 'MMM dd HH:mm'),
+      time: formatDateShort(item.ts),
       bybit: viewMode === 'apr' ? b_ann : b_norm,
       lighter: viewMode === 'apr' ? l_ann : l_norm,
       netEdge: viewMode === 'apr' ? net_ann : (l_norm - b_norm),
@@ -169,7 +177,7 @@ export function FundingPage() {
                   contentStyle={{ backgroundColor: '#1A1A24', border: '1px solid #2B2B36', borderRadius: '8px', color: '#FFF' }}
                   itemStyle={{ fontSize: '13px', fontWeight: 'bold' }}
                   labelStyle={{ color: '#8F8F9F', marginBottom: '8px', fontSize: '12px' }}
-                  formatter={(value: number, name: string) => [`${value.toFixed(4)}%`, name]}
+                  formatter={(value: any, name: any) => [`${Number(value).toFixed(4)}%`, String(name)]}
                 />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
                 <ReferenceLine y={0} stroke="#5A5A6C" strokeDasharray="3 3" />
