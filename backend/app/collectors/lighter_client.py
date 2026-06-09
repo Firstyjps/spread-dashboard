@@ -240,7 +240,11 @@ class LighterClient:
                 tx_hash = getattr(resp_obj, "tx_hash", None) or str(resp_obj)
 
             log.info("lighter_order_success", tx_hash=tx_hash, symbol=symbol)
-            return {"status": "success", "tx_hash": tx_hash}
+            return {
+                "status": "success",
+                "tx_hash": tx_hash,
+                "estimated_price": current_price
+            }
 
         except Exception as e:
             log.error("lighter_execution_error", symbol=symbol, error=str(e))

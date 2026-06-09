@@ -278,6 +278,7 @@ class ArbitrageExecutor:
                 start_ms=start_ms,
                 status="partial" if bybit_res.status == "partial" else "success",
                 detail=f"Lighter matched Bybit fill; tx={lighter_res.get('tx_hash', 'unknown') if isinstance(lighter_res, dict) else 'unknown'}",
+                lighter_res=lighter_res,
             )
             return [lighter_res, bybit_res]
 
@@ -346,7 +347,25 @@ class ArbitrageExecutor:
         start_ms: float,
         status: str,
         detail: Optional[str] = None,
+        lighter_res: Optional[dict] = None,
     ):
+        bybit_price = _to_float(getattr(bybit_res, "avg_price", None))
+        lighter_price = _to_float(lighter_res.get("estimated_price")) if isinstance(lighter_res, dict) else None
+        
+        # Calculate PNL if both prices are available and order was filled
+        net_pnl = None
+        if qty_filled > 0 and bybit_price and lighter_price:
+            # BUY_LIGHTER_SELL_BYBIT means we are Short Bybit, Long Lighter
+            if strategy_side == "BUY_LIGHTER_SELL_BYBIT":
+                # Profit = Sell Bybit - Buy Lighter
+                net_pnl = (bybit_price - lighter_price) * qty_filled
+            else:
+                # Profit = Sell Lighter - Buy Bybit
+                net_pnl = (lighter_price - bybit_price) * qty_filled
+            
+            bybit_fee = _to_float(getattr(bybit_res, "estimated_fee", 0.0)) or 0.0
+            net_pnl -= bybit_fee
+
         trade = TradeRecord(
             ts=time.time() * 1000,
             symbol=symbol,
@@ -355,9 +374,11 @@ class ArbitrageExecutor:
             qty_requested=qty_requested,
             qty_filled=qty_filled,
             bybit_side=bybit_side,
-            bybit_fill_price=_to_float(getattr(bybit_res, "avg_price", None)),
+            bybit_fill_price=bybit_price,
             bybit_fee=_to_float(getattr(bybit_res, "estimated_fee", None)),
+            lighter_fill_price=lighter_price,
             spread_bps_at_entry=spread_bps_at_entry,
+            net_pnl_usd=net_pnl,
             duration_ms=time.time() * 1000 - start_ms,
             status=status,
             detail=detail,
