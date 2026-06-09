@@ -28,11 +28,23 @@ export function FundingPage() {
   });
 
   // Fetch historical funding
-  const { data: historyData, isLoading: isLoadingHistory, refetch } = useQuery({
+  const { data: historyData, isLoading: isLoadingHistory, refetch: refetchHistory } = useQuery({
     queryKey: ['funding_history', activeSymbol, historyLimit],
     queryFn: () => api.fundingHistory(activeSymbol, historyLimit),
     refetchInterval: 5 * 60 * 1000,
   });
+
+  // Fetch current spread/price data
+  const { data: spreadData, refetch: refetchSpread } = useQuery({
+    queryKey: ['spreads', activeSymbol],
+    queryFn: () => api.spreads(activeSymbol),
+    refetchInterval: 2000,
+  });
+
+  const refetchAll = () => {
+    refetchHistory();
+    refetchSpread();
+  };
 
   // Calculate live stats
   const currentLive = liveData?.[activeSymbol];
@@ -45,6 +57,10 @@ export function FundingPage() {
 
   const bNorm = liveBybit * 100;
   const lNorm = liveLighter * 100;
+
+  const currentPrice = spreadData?.current?.bybit_mid || 0;
+  const dailyNetRatio = (liveLighter * 24) - (liveBybit * 3);
+  const dailyUsdProfit = currentPrice * dailyNetRatio;
 
   const formatPercent = (val: number | undefined | null) => {
     if (val == null) return '0.00%';
@@ -117,9 +133,14 @@ export function FundingPage() {
 
         <div className="bg-bg2 border border-border rounded-xl p-5 flex flex-col relative overflow-hidden">
           <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-brand/10 rounded-full blur-2xl"></div>
-          <span className="text-xs font-bold text-fg3 uppercase tracking-wider mb-2">Net Edge {viewMode === 'apr' ? '(APR)' : ''}</span>
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-xs font-bold text-fg3 uppercase tracking-wider">Net Edge {viewMode === 'apr' ? '(APR)' : ''}</span>
+          </div>
           <span className={`text-3xl font-black ${netAnn > 0 ? 'text-long' : 'text-short'}`}>
             {formatPercent(viewMode === 'apr' ? netAnn : (lNorm - bNorm))}
+          </span>
+          <span className="text-xs text-fg3 mt-2 font-medium">
+            Daily Est: <span className={dailyUsdProfit > 0 ? 'text-long' : 'text-short'}>{dailyUsdProfit > 0 ? '+' : ''}${dailyUsdProfit.toFixed(4)}</span> / 1 {activeSymbol.replace('USDT', '')}
           </span>
         </div>
       </div>
@@ -140,7 +161,7 @@ export function FundingPage() {
               ))}
             </select>
             
-            <button onClick={() => refetch()} className="p-1.5 text-fg3 hover:text-brand bg-bg1 border border-border rounded-md transition-colors">
+            <button onClick={() => refetchAll()} className="p-1.5 text-fg3 hover:text-brand bg-bg1 border border-border rounded-md transition-colors">
               <RefreshCw className={`w-4 h-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
             </button>
           </div>
