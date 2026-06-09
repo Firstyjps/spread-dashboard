@@ -128,8 +128,11 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
   const activeFunding = fundingData?.[activeSymbol];
   const bybitFunding = activeFunding?.bybit?.funding_rate;
   const lighterFunding = activeFunding?.lighter?.funding_rate;
-  const netFunding8h = (bybitFunding != null && lighterFunding != null)
-    ? (bybitFunding - lighterFunding * 8)
+
+  const bybitAnnualized = bybitFunding != null ? bybitFunding * 3 * 365 : null;
+  const lighterAnnualized = lighterFunding != null ? lighterFunding * 24 * 365 : null;
+  const netFundingAnnualized = (bybitAnnualized != null && lighterAnnualized != null)
+    ? (bybitAnnualized - lighterAnnualized)
     : null;
 
   // Countdown for next funding
@@ -276,37 +279,37 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
 
             <div className="grid grid-cols-2 gap-2 text-xs font-mono">
               <div className="bg-card border border-bd1 p-2 rounded">
-                <span className="text-fg3 text-[9px] uppercase font-bold">Bybit (8h)</span>
+                <span className="text-fg3 text-[9px] uppercase font-bold">Bybit (APR)</span>
                 <div
                   className={`text-sm font-bold mt-0.5 ${
-                    bybitFunding != null && bybitFunding > 0 ? 'text-long' : 'text-fg1'
+                    bybitAnnualized != null && bybitAnnualized > 0 ? 'text-long' : 'text-fg1'
                   }`}
                 >
-                  {bybitFunding != null ? `${(bybitFunding * 100).toFixed(4)}%` : '—'}
+                  {bybitAnnualized != null ? `${(bybitAnnualized * 100).toFixed(2)}%` : '—'}
                 </div>
               </div>
               <div className="bg-card border border-bd1 p-2 rounded">
-                <span className="text-fg3 text-[9px] uppercase font-bold">Lighter (1h)</span>
+                <span className="text-fg3 text-[9px] uppercase font-bold">Lighter (APR)</span>
                 <div
                   className={`text-sm font-bold mt-0.5 ${
-                    lighterFunding != null && lighterFunding > 0 ? 'text-long' : 'text-info'
+                    lighterAnnualized != null && lighterAnnualized > 0 ? 'text-long' : 'text-info'
                   }`}
                 >
-                  {lighterFunding != null ? `${(lighterFunding * 100).toFixed(4)}%` : '—'}
+                  {lighterAnnualized != null ? `${(lighterAnnualized * 100).toFixed(2)}%` : '—'}
                 </div>
               </div>
             </div>
 
-            {netFunding8h != null && (
+            {netFundingAnnualized != null && (
               <div className="flex items-center justify-between text-xs border-t border-bd1/50 pt-2 font-mono">
-                <span className="text-fg3 font-sans font-medium">Net Edge / 8h</span>
+                <span className="text-fg3 font-sans font-medium">Net Edge / APR</span>
                 <span
                   className={`font-black ${
-                    netFunding8h > 0 ? 'text-long' : 'text-short'
+                    netFundingAnnualized > 0 ? 'text-long' : 'text-short'
                   }`}
                 >
-                  {netFunding8h > 0 ? '+' : ''}
-                  {(netFunding8h * 100).toFixed(4)}%
+                  {netFundingAnnualized > 0 ? '+' : ''}
+                  {(netFundingAnnualized * 100).toFixed(2)}%
                 </span>
               </div>
             )}
