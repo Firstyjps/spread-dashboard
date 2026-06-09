@@ -38,6 +38,7 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
   // Active symbol context state
   const [activeSymbol, setActiveSymbol] = useState<string>('');
   const [clearedAt, setClearedAt] = useState<number | null>(null);
+  const [fundingMode, setFundingMode] = useState<'normal' | 'apr'>('apr');
 
   // Fallback to first symbol
   useEffect(() => {
@@ -266,9 +267,25 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
 
         {/* Funding Rates Section */}
         <div className="hidden lg:block pt-5 lg:pt-0">
-          <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider mb-3">
-            Funding Arb Edge
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[10px] font-bold text-fg3 uppercase tracking-wider">
+              Funding Arb Edge
+            </h3>
+            <div className="flex bg-card border border-bd1 rounded overflow-hidden text-[9px] font-bold">
+              <button
+                onClick={() => setFundingMode('normal')}
+                className={`px-2 py-0.5 transition-colors ${fundingMode === 'normal' ? 'bg-warn text-bg1' : 'text-fg3 hover:text-fg1'}`}
+              >
+                NORMAL
+              </button>
+              <button
+                onClick={() => setFundingMode('apr')}
+                className={`px-2 py-0.5 transition-colors ${fundingMode === 'apr' ? 'bg-warn text-bg1' : 'text-fg3 hover:text-fg1'}`}
+              >
+                APR
+              </button>
+            </div>
+          </div>
           <div className="bg-card/30 border border-bd1 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between text-xs">
               <span className="text-fg2 font-sans font-medium">Countdown (Bybit)</span>
@@ -279,47 +296,55 @@ export const OverviewPage = React.memo(function OverviewPage({ data }: Props) {
 
             <div className="grid grid-cols-2 gap-2 text-xs font-mono">
               <div className="bg-card border border-bd1 p-2 rounded">
-                <span className="text-fg3 text-[9px] uppercase font-bold">Bybit (APR)</span>
+                <span className="text-fg3 text-[9px] uppercase font-bold">
+                  Bybit ({fundingMode === 'apr' ? 'APR' : '8h'})
+                </span>
                 <div
                   className={`text-sm font-bold mt-0.5 ${
-                    bybitAnnualized != null && bybitAnnualized > 0 ? 'text-long' : 'text-fg1'
+                    bybitFunding != null && bybitFunding > 0 ? 'text-long' : 'text-fg1'
                   }`}
                 >
-                  {bybitAnnualized != null ? `${(bybitAnnualized * 100).toFixed(2)}%` : '—'}
-                  {bybitFunding != null && (
-                    <span className="text-[10px] text-fg3 font-normal ml-1">
-                      ({(bybitFunding * 100).toFixed(4)}%)
-                    </span>
-                  )}
+                  {bybitFunding != null
+                    ? `${((fundingMode === 'apr' ? bybitAnnualized : bybitFunding)! * 100).toFixed(
+                        fundingMode === 'apr' ? 2 : 4
+                      )}%`
+                    : '—'}
                 </div>
               </div>
               <div className="bg-card border border-bd1 p-2 rounded">
-                <span className="text-fg3 text-[9px] uppercase font-bold">Lighter (APR)</span>
+                <span className="text-fg3 text-[9px] uppercase font-bold">
+                  Lighter ({fundingMode === 'apr' ? 'APR' : '1h'})
+                </span>
                 <div
                   className={`text-sm font-bold mt-0.5 ${
-                    lighterAnnualized != null && lighterAnnualized > 0 ? 'text-long' : 'text-info'
+                    lighterFunding != null && lighterFunding > 0 ? 'text-long' : 'text-info'
                   }`}
                 >
-                  {lighterAnnualized != null ? `${(lighterAnnualized * 100).toFixed(2)}%` : '—'}
-                  {lighterFunding != null && (
-                    <span className="text-[10px] text-fg3 font-normal ml-1">
-                      ({(lighterFunding * 100).toFixed(4)}%)
-                    </span>
-                  )}
+                  {lighterFunding != null
+                    ? `${((fundingMode === 'apr' ? lighterAnnualized : lighterFunding)! * 100).toFixed(
+                        fundingMode === 'apr' ? 2 : 4
+                      )}%`
+                    : '—'}
                 </div>
               </div>
             </div>
 
-            {netFundingAnnualized != null && (
+            {(bybitFunding != null && lighterFunding != null) && (
               <div className="flex items-center justify-between text-xs border-t border-bd1/50 pt-2 font-mono">
-                <span className="text-fg3 font-sans font-medium">Net Edge / APR</span>
+                <span className="text-fg3 font-sans font-medium">
+                  Net Edge / {fundingMode === 'apr' ? 'APR' : '8h'}
+                </span>
                 <span
                   className={`font-black ${
-                    netFundingAnnualized > 0 ? 'text-long' : 'text-short'
+                    (fundingMode === 'apr' ? netFundingAnnualized! : (lighterFunding * 8 - bybitFunding)) > 0
+                      ? 'text-long'
+                      : 'text-short'
                   }`}
                 >
-                  {netFundingAnnualized > 0 ? '+' : ''}
-                  {(netFundingAnnualized * 100).toFixed(2)}%
+                  {(fundingMode === 'apr' ? netFundingAnnualized! : (lighterFunding * 8 - bybitFunding)) > 0 ? '+' : ''}
+                  {((fundingMode === 'apr' ? netFundingAnnualized! : (lighterFunding * 8 - bybitFunding)) * 100).toFixed(
+                    fundingMode === 'apr' ? 2 : 4
+                  )}%
                 </span>
               </div>
             )}
