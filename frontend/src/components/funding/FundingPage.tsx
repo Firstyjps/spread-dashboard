@@ -118,7 +118,7 @@ export function FundingPage() {
         <div className="bg-bg2 border border-border rounded-xl p-5 flex flex-col relative overflow-hidden">
           <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-brand/10 rounded-full blur-2xl"></div>
           <span className="text-xs font-bold text-fg3 uppercase tracking-wider mb-2">Net Edge {viewMode === 'apr' ? '(APR)' : ''}</span>
-          <span className={`text-3xl font-black ${netAnn > 0 ? 'text-brand' : 'text-short'}`}>
+          <span className={`text-3xl font-black ${netAnn > 0 ? 'text-long' : 'text-short'}`}>
             {formatPercent(viewMode === 'apr' ? netAnn : (lNorm - bNorm))}
           </span>
         </div>
