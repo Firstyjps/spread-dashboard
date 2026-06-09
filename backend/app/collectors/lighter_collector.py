@@ -433,7 +433,8 @@ async def fetch_funding_rate(symbol: str) -> Optional[FundingSnapshot]:
         return None
 
     try:
-        rate = float(lighter_rate["rate"])
+        # Lighter API returns an 8-hour rate by default. Convert to 1-hour rate.
+        rate = float(lighter_rate["rate"]) / 8.0
         interval_hours = 1.0
 
         return FundingSnapshot(

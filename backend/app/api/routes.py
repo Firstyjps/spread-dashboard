@@ -205,7 +205,8 @@ async def funding():
         lighter_f = await lighter_collector.fetch_funding_rate(symbol)
         diff = None
         if bybit_f and lighter_f:
-            diff = lighter_f.funding_rate - bybit_f.funding_rate
+            lighter_8h_rate = lighter_f.funding_rate * (8.0 / lighter_f.funding_interval_hours)
+            diff = lighter_8h_rate - bybit_f.funding_rate
         result[symbol] = {
             "bybit": bybit_f.model_dump() if bybit_f else None,
             "lighter": lighter_f.model_dump() if lighter_f else None,
