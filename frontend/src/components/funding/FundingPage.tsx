@@ -146,16 +146,18 @@ export function FundingPage() {
           </div>
         </div>
 
-        <div className="flex-1 w-full relative">
+        <div className="flex-1 w-full relative min-h-0">
           {isLoadingHistory && chartData.length === 0 ? (
-            <div className="absolute inset-0 flex items-center justify-center text-fg3 animate-pulse">
+            <div className="absolute inset-0 flex items-center justify-center text-fg3 animate-pulse z-10 bg-bg2">
               Loading historical data...
             </div>
           ) : chartData.length === 0 ? (
-            <div className="absolute inset-0 flex items-center justify-center text-fg3">
+            <div className="absolute inset-0 flex items-center justify-center text-fg3 z-10 bg-bg2">
               No historical data available. The background loop might just be starting!
             </div>
-          ) : (
+          ) : null}
+          
+          <div className="absolute inset-0">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2B2B36" vertical={false} />
@@ -210,7 +212,7 @@ export function FundingPage() {
                 />
               </LineChart>
             </ResponsiveContainer>
-          )}
+          </div>
         </div>
       </div>
     </div>
