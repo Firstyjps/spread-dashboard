@@ -257,11 +257,17 @@ async def funding_history(symbol: str = Query(..., description="Symbol to fetch 
             
             if closest:
                 l_rate = closest.get("lighter_rate") or 0.0
-                
+            b_ann = b_rate * 3 * 365
+            l_ann = l_rate * 24 * 365
+            net_ann = l_ann - b_ann
+            
             merged_history.append({
                 "ts": b_ts,
-                "bybit_rate": b_rate,
-                "lighter_rate": l_rate,
+                "bybit_funding_rate": b_rate,
+                "lighter_funding_rate": l_rate,
+                "bybit_annualized": b_ann,
+                "lighter_annualized": l_ann,
+                "net_funding_annualized": net_ann,
             })
         except Exception:
             continue
