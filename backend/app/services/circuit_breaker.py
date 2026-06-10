@@ -9,7 +9,7 @@ class CircuitBreaker:
         self.trip_ts: float = 0
         self.consecutive_failures: int = 0
         self.max_failures: int = 3
-        self.feed_gap_threshold_s: float = 30.0
+        self.feed_gap_threshold_s: float = 60.0
 
     def trip(self, reason: str) -> bool:
         """Trip the breaker. Returns True only when this is a new trip."""
