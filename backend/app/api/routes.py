@@ -246,7 +246,7 @@ async def funding_history(symbol: str = Query(..., description="Symbol to fetch 
             b_rate = float(b_item.get("fundingRate", 0))
             
             # Find closest Lighter record within +/- 4 hours
-            l_rate = 0.0
+            l_rate = None
             closest = None
             min_diff = float("inf")
             for row in db_history:
@@ -257,9 +257,10 @@ async def funding_history(symbol: str = Query(..., description="Symbol to fetch 
             
             if closest:
                 l_rate = closest.get("lighter_rate") or 0.0
+
             b_ann = b_rate * 3 * 365
-            l_ann = l_rate * 24 * 365
-            net_ann = l_ann - b_ann
+            l_ann = (l_rate * 24 * 365) if l_rate is not None else None
+            net_ann = (l_ann - b_ann) if l_ann is not None else None
             
             merged_history.append({
                 "ts": b_ts,

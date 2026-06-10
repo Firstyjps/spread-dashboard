@@ -68,19 +68,19 @@ export function FundingPage() {
   };
 
   const chartData = (historyData || []).map((item: any) => {
-    const b_ann = (item.bybit_annualized || 0) * 100;
-    const l_ann = (item.lighter_annualized || 0) * 100;
-    const net_ann = (item.net_funding_annualized || 0) * 100;
+    const b_ann = item.bybit_annualized != null ? item.bybit_annualized * 100 : null;
+    const l_ann = item.lighter_annualized != null ? item.lighter_annualized * 100 : null;
+    const net_ann = item.net_funding_annualized != null ? item.net_funding_annualized * 100 : null;
 
-    const b_norm = (item.bybit_funding_rate || 0) * 100;
-    const l_norm = (item.lighter_funding_rate || 0) * 100;
+    const b_norm = item.bybit_funding_rate != null ? item.bybit_funding_rate * 100 : null;
+    const l_norm = item.lighter_funding_rate != null ? item.lighter_funding_rate * 100 : null;
 
     return {
       ts: item.ts,
       time: formatDateShort(item.ts),
       bybit: viewMode === 'apr' ? b_ann : b_norm,
       lighter: viewMode === 'apr' ? l_ann : l_norm,
-      netEdge: viewMode === 'apr' ? net_ann : (l_norm - b_norm),
+      netEdge: viewMode === 'apr' ? net_ann : (l_norm != null && b_norm != null ? l_norm - b_norm : null),
     };
   });
 
