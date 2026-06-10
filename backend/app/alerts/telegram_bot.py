@@ -5,6 +5,12 @@ Receives commands from Telegram and responds interactively.
 
 Commands:
   /status              - Current spread & prices for all symbols
+  /positions [SYMBOL]  - Show current open positions
+  /balance             - Show account balances
+  /funding             - Show current funding rates
+  /bot start/stop      - Start or stop the auto-hedge bot
+  /close_all [SYMBOL]  - Emergency close all positions
+  /pnl                 - 24h PnL summary
   /threshold           - Show current alert thresholds
   /set SYMBOL UP LOW   - Change thresholds at runtime
   /mute [minutes]      - Mute alerts (default 30 min)
@@ -72,6 +78,12 @@ async def _cmd_help(chat_id: str, _args: str, session: aiohttp.ClientSession) ->
     return (
         "<b>Available commands:</b>\n"
         "/status — Current spread & prices\n"
+        "/positions — Show open positions\n"
+        "/balance — Show account balances\n"
+        "/funding — Show funding rates\n"
+        "/bot start/stop — Manage auto-hedge bot\n"
+        "/close_all [SYMBOL] — Emergency close all positions\n"
+        "/pnl — 24h PnL summary\n"
         "/threshold — Show alert thresholds\n"
         "/set SYMBOL UPPER LOWER — Change threshold\n"
         "/mute [minutes] — Mute alerts (default 30)\n"
@@ -216,6 +228,118 @@ async def _cmd_history(chat_id: str, args: str, session: aiohttp.ClientSession) 
     return "\n".join(lines)
 
 
+async def _cmd_positions(chat_id: str, args: str, session: aiohttp.ClientSession) -> str:
+    from app.portfolio.service import fetch_portfolio_snapshot
+    try:
+        snap = await fetch_portfolio_snapshot()
+        lines = ["<b>📊 Open Positions</b>\n"]
+        for exch in snap.snapshots:
+            lines.append(f"<b>{exch.exchange.title()}</b>:")
+            if not exch.positions:
+                lines.append("  No open positions")
+            for pos in exch.positions:
+                lines.append(f"  {pos.symbol} {pos.side}: {pos.amount} @ {pos.entry_price}")
+            if exch.errors:
+                lines.append(f"  ⚠️ Errors: {', '.join(exch.errors)}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"❌ Error fetching positions: {e}"
+
+
+async def _cmd_balance(chat_id: str, args: str, session: aiohttp.ClientSession) -> str:
+    from app.portfolio.service import fetch_portfolio_snapshot
+    try:
+        snap = await fetch_portfolio_snapshot()
+        lines = ["<b>💰 Account Balance</b>\n"]
+        for exch in snap.snapshots:
+            lines.append(f"<b>{exch.exchange.title()}</b>:")
+            if not exch.balances:
+                lines.append("  No balances")
+            for bal in exch.balances:
+                if bal.total > 0:
+                    lines.append(f"  {bal.asset}: {bal.total:.4f} (Free: {bal.free:.4f})")
+            if exch.errors:
+                lines.append(f"  ⚠️ Errors: {', '.join(exch.errors)}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"❌ Error fetching balances: {e}"
+
+
+async def _cmd_funding(chat_id: str, args: str, session: aiohttp.ClientSession) -> str:
+    from app.collectors import bybit_collector, lighter_collector
+    from app.config import settings
+    lines = ["<b>💸 Funding Rates</b>\n"]
+    for symbol in settings.symbol_list:
+        try:
+            b_f = await bybit_collector.fetch_funding_rate(symbol)
+            l_f = await lighter_collector.fetch_funding_rate(symbol)
+            if b_f and l_f:
+                b_rate = b_f.funding_rate * 100
+                l_rate = l_f.funding_rate * 100
+                l_8h_rate = (l_f.funding_rate * (8.0 / l_f.funding_interval_hours)) * 100
+                diff = l_8h_rate - b_rate
+                lines.append(f"<b>{symbol}</b>")
+                lines.append(f"  Bybit (8h): {b_rate:.4f}%")
+                lines.append(f"  Lighter (1h): {l_rate:.4f}% (8h eq: {l_8h_rate:.4f}%)")
+                lines.append(f"  Diff (8h): {diff:.4f}%")
+        except Exception:
+            lines.append(f"<b>{symbol}</b>: Error fetching data")
+    return "\n".join(lines)
+
+
+async def _cmd_bot(chat_id: str, args: str, session: aiohttp.ClientSession) -> str:
+    from app.services.auto_hedge import get_auto_hedge_service
+    svc = get_auto_hedge_service()
+    action = args.strip().lower()
+    
+    if action == "start":
+        try:
+            await svc.start()
+            return "✅ Auto-hedge bot started."
+        except Exception as e:
+            return f"⚠️ Could not start: {e}"
+    elif action == "stop":
+        try:
+            await svc.stop()
+            return "🛑 Auto-hedge bot stopped."
+        except Exception as e:
+            return f"⚠️ Could not stop: {e}"
+    else:
+        st = svc.status()
+        running = "🟢 Running" if st.get("running") else "🔴 Stopped"
+        return f"<b>🤖 Bot Status:</b> {running}\nUsage: /bot start | /bot stop"
+
+
+async def _cmd_close_all(chat_id: str, args: str, session: aiohttp.ClientSession) -> str:
+    from app.services.executor import ArbitrageExecutor
+    from app.config import settings
+    symbol = args.strip().upper() or "XAUTUSDT"
+    try:
+        async with ArbitrageExecutor(settings) as executor:
+            res = await executor.emergency_close_auto(symbol)
+            return f"🚨 <b>Emergency Close Executed for {symbol}</b>\nDetails: {res}"
+    except Exception as e:
+        return f"❌ Failed to close {symbol}: {e}"
+
+
+async def _cmd_pnl(chat_id: str, args: str, session: aiohttp.ClientSession) -> str:
+    from app.storage.database import get_recent_trades
+    import time
+    
+    cutoff = (time.time() - 86400) * 1000
+    try:
+        trades = await get_recent_trades(limit=500)
+        trades = [t for t in trades if t["ts"] >= cutoff and t.get("net_pnl_usd") is not None]
+        
+        if not trades:
+            return "No trades with PnL in the last 24 hours."
+            
+        total_pnl = sum(t["net_pnl_usd"] for t in trades)
+        return f"<b>💵 24h PnL:</b> ${total_pnl:.4f}\n<i>Based on {len(trades)} completed trades.</i>"
+    except Exception as e:
+        return f"❌ Error fetching PnL: {e}"
+
+
 # --- Command dispatcher ---
 
 _COMMANDS = {
@@ -223,6 +347,12 @@ _COMMANDS = {
     "/help": _cmd_help,
     "/start": _cmd_help,
     "/status": _cmd_status,
+    "/positions": _cmd_positions,
+    "/balance": _cmd_balance,
+    "/funding": _cmd_funding,
+    "/bot": _cmd_bot,
+    "/close_all": _cmd_close_all,
+    "/pnl": _cmd_pnl,
     "/threshold": _cmd_threshold,
     "/set": _cmd_set,
     "/mute": _cmd_mute,
