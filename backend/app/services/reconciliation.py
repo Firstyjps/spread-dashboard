@@ -87,9 +87,10 @@ class ReconciliationService:
                 await send_system_alert(
                     "position_mismatch",
                     (
-                        f"Position mismatch {symbol}: "
-                        f"bybit={bybit_qty:.6f}, lighter={lighter_qty:.6f}, "
-                        f"net_delta={net_delta:.6f}"
+                        f"<b>Position Mismatch ({symbol})</b>\n"
+                        f"• Bybit: {bybit_qty:.6f}\n"
+                        f"• Lighter: {lighter_qty:.6f}\n"
+                        f"<b>Net Delta: {net_delta:.6f}</b>"
                     ),
                     severity="critical",
                     value=abs(net_delta),

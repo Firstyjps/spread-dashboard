@@ -84,12 +84,16 @@ def build_alert_message(
     Handles mid-price calculation, 2-decimal formatting, and timezone conversion.
     """
     return (
-        f"\U0001f6a8 <b>SPREAD ALERT {symbol}</b>\n"
-        f"metric={spread_bps:.2f} bps (upper={upper_bps:.2f})\n"
-        f"Side={side}\n"
-        f"bybit mid={_safe_mid(bybit_bid, bybit_ask)}\n"
-        f"lighter mid={_safe_mid(lighter_bid, lighter_ask)}\n"
-        f"{_format_ts_bangkok(ts_utc)}"
+        f"🔴 <b>[ALERT] Spread Too Wide!</b>\n"
+        f"<b>Symbol:</b> #{symbol}\n"
+        f"<b>Action:</b> {side}\n\n"
+        f"📊 <b>Metrics:</b>\n"
+        f"• Current Spread: <b>{spread_bps:.2f} bps</b>\n"
+        f"• Upper Limit: {upper_bps:.2f} bps\n\n"
+        f"💱 <b>Prices:</b>\n"
+        f"• Bybit Mid: {_safe_mid(bybit_bid, bybit_ask)}\n"
+        f"• Lighter Mid: {_safe_mid(lighter_bid, lighter_ask)}\n\n"
+        f"🕒 <i>{_format_ts_bangkok(ts_utc)}</i>"
     )
 
 
@@ -105,11 +109,15 @@ def build_recovery_message(
 ) -> str:
     """Build the Telegram recovery message with identical formatting standards."""
     return (
-        f"\u2705 <b>SPREAD NORMAL {symbol}</b>\n"
-        f"metric={spread_bps:.2f} bps (lower={lower_bps:.2f})\n"
-        f"bybit mid={_safe_mid(bybit_bid, bybit_ask)}\n"
-        f"lighter mid={_safe_mid(lighter_bid, lighter_ask)}\n"
-        f"{_format_ts_bangkok(ts_utc)}"
+        f"✅ <b>[RECOVERY] Spread Normal</b>\n"
+        f"<b>Symbol:</b> #{symbol}\n\n"
+        f"📊 <b>Metrics:</b>\n"
+        f"• Current Spread: <b>{spread_bps:.2f} bps</b>\n"
+        f"• Lower Limit: {lower_bps:.2f} bps\n\n"
+        f"💱 <b>Prices:</b>\n"
+        f"• Bybit Mid: {_safe_mid(bybit_bid, bybit_ask)}\n"
+        f"• Lighter Mid: {_safe_mid(lighter_bid, lighter_ask)}\n\n"
+        f"🕒 <i>{_format_ts_bangkok(ts_utc)}</i>"
     )
 
 
@@ -307,7 +315,14 @@ async def send_system_alert(
         return False
 
     _system_last_sent[alert_type] = now
-    full_message = f"\u26a0\ufe0f SYSTEM: {message}"
+    
+    emoji_map = {"critical": "🚨", "warning": "⚠️", "info": "ℹ️"}
+    emoji = emoji_map.get(severity.lower(), "⚠️")
+    
+    if "\n" in message:
+        full_message = f"{emoji} <b>[SYSTEM ALERT]</b>\n{message}"
+    else:
+        full_message = f"{emoji} <b>[SYSTEM ALERT]</b> {message}"
 
     try:
         alert = Alert(

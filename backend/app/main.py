@@ -264,9 +264,13 @@ async def _check_feed_staleness(symbols: list[str]):
                 age_s = (now_ms - last_ts) / 1000
                 await send_system_alert(
                     "feed_stale",
-                    f"{exchange} feed for {symbol} is stale for {age_s:.1f}s; circuit breaker tripped",
+                    (
+                        f"<b>Circuit Breaker Tripped</b>\n"
+                        f"• Exchange: {exchange}\n"
+                        f"• Symbol: {symbol}\n"
+                        f"• Reason: Feed is stale for {age_s:.1f}s"
+                    ),
                     severity="critical",
-                    value=age_s,
                     threshold=circuit_breaker.feed_gap_threshold_s,
                 )
         try:
