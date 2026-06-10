@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../../services/api';
 
 import { PortfolioData, NormalizedPosition } from '../../types/api';
@@ -46,6 +47,21 @@ export const PortfolioPage = React.memo(function PortfolioPage() {
     staleTime: 8000,
   });
 
+  const { data: historyData } = useQuery({
+    queryKey: ['portfolioHistory', 'manual', 30],
+    queryFn: () => api.portfolioHistory('manual', 30),
+    refetchInterval: 300000,
+  });
+
+  const chartData = React.useMemo(() => {
+    if (!historyData || historyData.length === 0) return [];
+    return historyData.map(d => ({
+      time: new Date(d.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      equity: d.total_equity ?? 0,
+      pnl: d.unrealized_pnl ?? 0,
+    }));
+  }, [historyData]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-500">
@@ -77,6 +93,43 @@ export const PortfolioPage = React.memo(function PortfolioPage() {
 
   return (
     <div className="space-y-6">
+      {/* ── Portfolio History Chart ── */}
+      {chartData.length > 0 && (
+        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Portfolio Equity & PnL History (30 Days)</h2>
+          </div>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                <XAxis dataKey="time" stroke="#6b7280" fontSize={10} tickMargin={8} minTickGap={30} />
+                <YAxis yAxisId="left" stroke="#6b7280" fontSize={10} tickFormatter={(val) => `$${val}`} />
+                <YAxis yAxisId="right" orientation="right" stroke="#6b7280" fontSize={10} tickFormatter={(val) => `$${val}`} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '0.5rem', fontSize: '12px' }}
+                  itemStyle={{ color: '#e5e7eb' }}
+                  formatter={(value: any, name: any) => [`$${Number(value).toFixed(2)}`, name === 'equity' ? 'Equity' : 'PnL']}
+                  labelStyle={{ color: '#9ca3af', marginBottom: '4px' }}
+                />
+                <Area yAxisId="left" type="monotone" dataKey="equity" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorEquity)" name="equity" />
+                <Area yAxisId="right" type="monotone" dataKey="pnl" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorPnl)" name="pnl" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* ── Combined Totals ── */}
       {totals.total_equity != null && (
         <div className={`rounded-lg border border-gray-800 p-5 ${pnlBg(totals.unrealized_pnl)}`}>

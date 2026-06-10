@@ -8,14 +8,11 @@ import type {
   Alert,
   TradeRecord,
   ConfigResponse,
-  MonitorSpreadsResponse,
-  MonitorHistoryResponse,
   PortfolioData,
+  PortfolioHistoryRecord,
   PositionsResponse,
 } from '../types/api';
 
-export type MonitorTimeframe = '4h' | '24h' | '7d';
-export type MonitorHistoryBucket = 'raw' | '1m' | '5m' | '15m' | '1h' | '4h';
 
 const BASE = '/api/v1';
 const FETCH_TIMEOUT_MS = 15000;
@@ -106,21 +103,13 @@ export const api = {
     return fetchJSON<TradeRecord[]>(`/trades?${params}`, true);
   },
   config: () => fetchJSON<ConfigResponse>('/config'),
-  
-  monitorPairs: (group = 'gold') => fetchJSON<{ group: string; pairs: unknown[]; count: number }>(`/monitor/pairs?group=${group}`),
-  monitorSpreads: (group = 'gold') => fetchJSON<MonitorSpreadsResponse>(`/monitor/spreads?group=${group}`),
-  monitorHistory: (pair: string, options?: { minutes?: number; timeframe?: MonitorHistoryBucket }) => {
-    const params = new URLSearchParams({ pair });
-    if (options?.minutes != null) params.set('minutes', String(options.minutes));
-    if (options?.timeframe != null) params.set('timeframe', options.timeframe);
-    return fetchJSON<MonitorHistoryResponse>(`/monitor/history?${params}`);
-  },
-
   exportCsvUrl: (symbol: string, minutes = 60) =>
     `${BASE}/spreads/export?symbol=${symbol}&minutes=${minutes}`,
 
   portfolio: (account?: 'manual' | 'ai') => 
     fetchJSON<PortfolioData>(`/portfolio${account ? `?account=${account}` : ''}`),
+  portfolioHistory: (account = 'manual', days = 30) => 
+    fetchJSON<PortfolioHistoryRecord[]>(`/portfolio/history?account=${account}&days=${days}`),
   positions: (symbol: string) => fetchJSON<PositionsResponse>(`/positions?symbol=${symbol}`),
 
   executeArb: (symbol: string, side: 'LONG_LIGHTER' | 'SHORT_LIGHTER', amount: number) =>

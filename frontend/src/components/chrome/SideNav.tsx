@@ -73,7 +73,6 @@ export function SideNav({ currentPage, onPageChange, mobileOpen = false, onMobil
             <SideNavItem icon="LayoutDashboard" label="Overview" pageId="overview" currentPage={currentPage} onClick={handlePageChange} />
             <SideNavItem icon="Coins" label="Funding" pageId="funding" currentPage={currentPage} onClick={handlePageChange} />
             <SideNavItem icon="BrainCircuit" label="AI Auto-Trade" pageId="ai" currentPage={currentPage} onClick={handlePageChange} />
-            <SideNavItem icon="Activity" label="Monitor" pageId="monitor" currentPage={currentPage} onClick={handlePageChange} />
             <SideNavItem icon="Wallet" label="Portfolio" pageId="portfolio" currentPage={currentPage} onClick={handlePageChange} />
           </div>
 

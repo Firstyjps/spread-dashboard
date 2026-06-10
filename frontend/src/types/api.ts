@@ -294,6 +294,16 @@ export interface PortfolioData {
   };
 }
 
+export interface PortfolioHistoryRecord {
+  id: number;
+  ts: number;
+  account: string;
+  total_equity: number | null;
+  available: number | null;
+  used_margin: number | null;
+  unrealized_pnl: number | null;
+}
+
 export interface PositionData {
   amount: number;
   is_long: boolean;

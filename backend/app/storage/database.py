@@ -141,6 +141,17 @@ async def init_db():
             net_funding_annualized REAL
         );
         CREATE INDEX IF NOT EXISTS idx_funding_metrics_symbol_ts ON funding_metrics(symbol, ts DESC);
+
+        CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts REAL NOT NULL,
+            account TEXT NOT NULL,
+            total_equity REAL,
+            available REAL,
+            used_margin REAL,
+            unrealized_pnl REAL
+        );
+        CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_account_ts ON portfolio_snapshots(account, ts DESC);
     """)
     await db.commit()
 
@@ -235,6 +246,24 @@ async def insert_funding_metric(
             bybit_annualized, lighter_annualized, net_funding_annualized)
            VALUES (?,?,?,?,?,?,?)""",
         (ts, symbol, bybit_rate, lighter_rate, bybit_ann, lighter_ann, net_ann),
+    )
+
+
+async def insert_portfolio_snapshot(account: str, totals: dict):
+    db = await _get_db()
+    ts = time.time() * 1000
+    await db.execute(
+        """INSERT INTO portfolio_snapshots
+           (ts, account, total_equity, available, used_margin, unrealized_pnl)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            ts, 
+            account, 
+            totals.get("total_equity"), 
+            totals.get("available"), 
+            totals.get("used_margin"), 
+            totals.get("unrealized_pnl")
+        ),
     )
 
 
@@ -411,6 +440,21 @@ async def get_funding_history(symbol: str, limit: int = 1000):
     return [dict(r) for r in rows]
 
 
+async def get_portfolio_history(account: str, limit: int = 720): # 720 hours = 30 days
+    db = await _get_db()
+    db.row_factory = aiosqlite.Row
+    cursor = await db.execute(
+        """SELECT id, ts, account, total_equity, available, used_margin, unrealized_pnl
+           FROM portfolio_snapshots
+           WHERE account = ?
+           ORDER BY ts ASC
+           LIMIT ?""",
+        (account, limit),
+    )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
 # ─── Maintenance ─────────────────────────────────────────────────
 
 async def cleanup_old_data(days: int = 7) -> int:
@@ -422,7 +466,7 @@ async def cleanup_old_data(days: int = 7) -> int:
         db = await _get_db()
         # NOTE: funding_snapshots is currently never written to (no producer wired);
         # /api/v1/funding fetches live each call. Skipping it avoids a wasteful daily DELETE.
-        for table in ["ticks", "spread_metrics", "alerts", "trades", "funding_metrics"]:
+        for table in ["ticks", "spread_metrics", "alerts", "trades", "funding_metrics", "portfolio_snapshots"]:
             try:
                 cursor = await db.execute(
                     f"DELETE FROM {table} WHERE ts < ?", (cutoff_ts,)

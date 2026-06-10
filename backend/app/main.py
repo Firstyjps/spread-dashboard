@@ -21,7 +21,6 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.requests import Request as _StarletteRequest
 from starlette.responses import JSONResponse as _StarletteJSONResponse
 from app.api.routes import router
-from app.api.monitor_routes import router as monitor_router
 from app.portfolio.router import router as portfolio_router
 from app.api.auto_hedge_routes import router as auto_hedge_router
 from app.api.sl_tp_routes import router as sl_tp_router
@@ -30,12 +29,12 @@ from app.api.ai_routes import router as ai_router
 from app.api.settings_routes import router as settings_router
 from app.collectors import bybit_collector, lighter_collector
 from app.analytics.spread_engine import update_tick, compute_spread, get_all_current_data, get_latest_tick
-from app.storage.database import init_db, insert_tick, insert_spread, insert_funding_metric, close_db, commit as db_commit, cleanup_old_data
+from app.storage.database import init_db, insert_tick, insert_spread, insert_funding_metric, insert_portfolio_snapshot, close_db, commit as db_commit, cleanup_old_data
+from app.portfolio.service import fetch_portfolio_snapshot
 from app.alerts import on_spread_update, close_telegram_session, start_telegram_bot, send_system_alert
 from app.metrics import POLL_CYCLE_DURATION, WS_CLIENTS, CONSECUTIVE_ERRORS
 from app.services.circuit_breaker import circuit_breaker
 from app.services.reconciliation import get_reconciliation_service
-from app.services.monitor import get_monitor_service
 from app.risk import get_risk_engine
 
 log = structlog.get_logger()
@@ -48,10 +47,10 @@ ws_send_locks: dict[WebSocket, asyncio.Lock] = {}
 
 # --- Background task handles ---
 _poll_task: asyncio.Task | None = None
-_monitor_task: asyncio.Task | None = None
 _bot_task: asyncio.Task | None = None
 _cleanup_task: asyncio.Task | None = None
 _funding_poll_task: asyncio.Task | None = None
+_portfolio_history_task: asyncio.Task | None = None
 
 
 _consecutive_errors = 0
@@ -206,52 +205,6 @@ async def _supervised_poll_loop():
             log.info("poll_loop_restarting")
 
 
-async def monitor_poll_loop():
-    """Background monitor loop for multi-exchange spread snapshots."""
-    service = get_monitor_service()
-    interval = settings.monitor_poll_interval_ms / 1000.0
-    log.info("monitor_poll_loop_started", interval_s=interval)
-
-    while True:
-        t0 = time.time()
-        try:
-            snapshot = await service.fetch_current_spreads(group="gold", store_history=True)
-            if ws_clients:
-                await _broadcast_monitor_update(snapshot)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            log.error("monitor_poll_loop_error", error=str(e))
-
-        elapsed = time.time() - t0
-        await asyncio.sleep(max(0.1, interval - elapsed))
-
-
-async def _supervised_monitor_poll_loop():
-    """Supervisor for monitor_poll_loop."""
-    while True:
-        try:
-            await monitor_poll_loop()
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            log.error("monitor_poll_loop_crashed", error=str(e))
-            await asyncio.sleep(2)
-            log.info("monitor_poll_loop_restarting")
-
-
-async def _broadcast_monitor_update(snapshot: dict) -> None:
-    msg = json.dumps({"type": "monitor_update", "data": snapshot, "ts": snapshot.get("ts")})
-    disconnected = []
-    for ws in list(ws_clients.keys()):
-        try:
-            await _send_ws_text(ws, msg)
-        except Exception:
-            disconnected.append(ws)
-    for ws in disconnected:
-        _remove_ws_client(ws)
-
-
 async def _check_feed_staleness(symbols: list[str]):
     now_ms = time.time() * 1000
     for symbol in symbols:
@@ -329,6 +282,39 @@ async def _supervised_funding_poll_loop():
             await asyncio.sleep(2)
             log.info("funding_poll_loop_restarting")
 
+async def portfolio_history_loop():
+    """Background task: fetch portfolio snapshot and save to history every 1 hour."""
+    interval = 3600 # 1 hour
+    await asyncio.sleep(20)  # Give time for initial startup
+    while True:
+        t0 = time.time()
+        try:
+            # We record 'manual' account totals for the chart
+            snapshot = await fetch_portfolio_snapshot(account="manual")
+            totals = snapshot.totals
+            if totals:
+                await insert_portfolio_snapshot("manual", totals)
+                await db_commit()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("portfolio_history_loop_error", error=str(e))
+        
+        elapsed = time.time() - t0
+        await asyncio.sleep(max(0.1, interval - elapsed))
+
+async def _supervised_portfolio_history_loop():
+    """Supervisor for portfolio_history_loop."""
+    while True:
+        try:
+            await portfolio_history_loop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("portfolio_history_loop_crashed", error=str(e))
+            await asyncio.sleep(2)
+            log.info("portfolio_history_loop_restarting")
+
 async def daily_cleanup_loop():
     """Background task: prune rows older than settings.data_retention_days every 24h.
 
@@ -366,11 +352,11 @@ async def lifespan(app: FastAPI):
     lighter_collector.start_market_stats_ws()
 
     # Start background polling with supervision (auto-restart on crash)
-    global _poll_task, _monitor_task, _bot_task, _cleanup_task, _funding_poll_task
+    global _poll_task, _bot_task, _cleanup_task, _funding_poll_task, _portfolio_history_task
     _poll_task = asyncio.create_task(_supervised_poll_loop())
-    _monitor_task = asyncio.create_task(_supervised_monitor_poll_loop())
     _cleanup_task = asyncio.create_task(daily_cleanup_loop())
     _funding_poll_task = asyncio.create_task(_supervised_funding_poll_loop())
+    _portfolio_history_task = asyncio.create_task(_supervised_portfolio_history_loop())
     await get_reconciliation_service().start()
 
     # Start Telegram bot command listener
@@ -398,16 +384,16 @@ async def lifespan(app: FastAPI):
             await _poll_task
         except asyncio.CancelledError:
             pass
-    if _monitor_task:
-        _monitor_task.cancel()
-        try:
-            await _monitor_task
-        except asyncio.CancelledError:
-            pass
     if _funding_poll_task:
         _funding_poll_task.cancel()
         try:
             await _funding_poll_task
+        except asyncio.CancelledError:
+            pass
+    if _portfolio_history_task:
+        _portfolio_history_task.cancel()
+        try:
+            await _portfolio_history_task
         except asyncio.CancelledError:
             pass
     await get_reconciliation_service().stop()
@@ -424,7 +410,6 @@ async def lifespan(app: FastAPI):
 
     # Close persistent HTTP sessions + DB
     await lighter_collector.stop_market_stats_ws()
-    await get_monitor_service().close()
     await bybit_collector.close_session()
     await lighter_collector.close_session()
     await close_telegram_session()
@@ -462,7 +447,6 @@ app.add_middleware(
 
 # Include REST routes
 app.include_router(router)
-app.include_router(monitor_router)
 app.include_router(portfolio_router)
 app.include_router(auto_hedge_router)
 app.include_router(sl_tp_router)
