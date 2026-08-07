@@ -93,7 +93,7 @@ mkdir -p backend/data
 chmod 700 backend/data
 
 # Ensure .env exists with CORS_ORIGINS
-grep -q CORS_ORIGINS backend/.env || echo 'CORS_ORIGINS=https://alphast.xyz' >> backend/.env
+grep -q CORS_ORIGINS backend/.env || echo 'CORS_ORIGINS=https://<your-domain>' >> backend/.env
 
 # Build and start
 docker compose up -d --build
@@ -161,11 +161,11 @@ docker ps --format "table {{.Names}}\t{{.Ports}}"
 # On your Mac:
 
 # 6. Public HTTPS works
-curl -I https://alphast.xyz
+curl -I https://<your-domain>
 # Expected: HTTP/2 200
 
 # 7. API through public URL
-curl -s https://alphast.xyz/api/v1/health
+curl -s https://<your-domain>/api/v1/health
 # Expected: {"status":"ok",...}
 
 # 8. WebSocket test (brief connect)
@@ -173,7 +173,7 @@ curl -s -o /dev/null -w "%{http_code}" \
   -H "Upgrade: websocket" -H "Connection: Upgrade" \
   -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
   -H "Sec-WebSocket-Version: 13" \
-  https://alphast.xyz/ws
+  https://<your-domain>/ws
 # Expected: 101 (switching protocols) or connection upgrade
 ```
 

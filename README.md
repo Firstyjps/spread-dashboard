@@ -1,6 +1,6 @@
 # Alphast
 
-Production: https://alphast.xyz
+Status: research project — not currently deployed.
 
 Alphast is a real-time spread monitoring, portfolio, risk, and execution dashboard
 for gold perp arbitrage research. The core production pair is **Bybit XAUTUSDT**
@@ -11,16 +11,16 @@ Hyperliquid, and OKX.
 
 - Local `main`, `origin/main`, and the VPS deployment should track the same commit.
 - Production runs on a Hetzner VPS behind Cloudflare and Nginx Proxy Manager.
-- The public app and API are served from `https://alphast.xyz`.
+- When deployed, the app and API are served from your own domain behind a reverse proxy.
 - The backend container is expected to be healthy, and the frontend container serves
   the static React build through nginx.
 
 Quick production checks:
 
 ```bash
-curl -fsS https://alphast.xyz/api/v1/health
-curl -fsS https://alphast.xyz/api/v1/prices
-curl -fsS https://alphast.xyz/api/v1/monitor/spreads
+curl -fsS https://<your-domain>/api/v1/health
+curl -fsS https://<your-domain>/api/v1/prices
+curl -fsS https://<your-domain>/api/v1/monitor/spreads
 ```
 
 ## What It Does
@@ -143,7 +143,7 @@ Important settings:
 
 ```env
 APP_ENV=production
-CORS_ORIGINS=https://alphast.xyz
+CORS_ORIGINS=https://<your-domain>
 
 BYBIT_BASE_URL=https://api.bytick.com
 LIGHTER_BASE_URL=https://mainnet.zklighter.elliot.ai
@@ -233,7 +233,7 @@ The Scriptable widget lives at `scripts/xau-spread-widget.js`.
 It should call:
 
 ```text
-https://alphast.xyz/api/v1/spreads?symbol=XAUTUSDT&minutes=60
+https://<your-domain>/api/v1/spreads?symbol=XAUTUSDT&minutes=60
 ```
 
 ## Useful Checks
