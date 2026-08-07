@@ -113,7 +113,7 @@ ssh -i ~/.ssh/<ssh-key> -L 8081:127.0.0.1:81 <user>@<server-ip>
 # Open: http://127.0.0.1:8081
 ```
 
-**Edit the `alphast.xyz` proxy host:**
+**Edit the proxy host for your domain:**
 
 | Field | Value |
 |-------|-------|
