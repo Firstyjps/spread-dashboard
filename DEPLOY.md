@@ -3,7 +3,7 @@
 ## Architecture
 
 ```
-Internet → Cloudflare (SSL/proxy) → Hetzner VPS (5.223.65.230)
+Internet → Cloudflare (SSL/proxy) → Hetzner VPS (<server-ip>)
                                       │
                                ┌──────┴──────┐
                                │  UFW (22/80/443)
@@ -51,7 +51,7 @@ Internet → Cloudflare (SSL/proxy) → Hetzner VPS (5.223.65.230)
 ## Deployment Steps
 
 ### Prerequisites
-- SSH into server: `ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230`
+- SSH into server: `ssh -i ~/.ssh/<ssh-key> <user>@<server-ip>`
 - All commands below run on the server as `deploy` user
 
 ### Step 1: Update NPM compose to support host.docker.internal
@@ -109,7 +109,7 @@ docker compose logs --tail=50 frontend
 Access NPM admin:
 ```bash
 # On your Mac — SSH tunnel:
-ssh -i ~/.ssh/hetzner_ed25519 -L 8081:127.0.0.1:81 deploy@5.223.65.230
+ssh -i ~/.ssh/<ssh-key> -L 8081:127.0.0.1:81 <user>@<server-ip>
 # Open: http://127.0.0.1:8081
 ```
 
@@ -237,7 +237,7 @@ docker compose up -d --build
 ### Access NPM admin
 ```bash
 # On your Mac (SSH tunnel):
-ssh -i ~/.ssh/hetzner_ed25519 -L 8081:127.0.0.1:81 deploy@5.223.65.230
+ssh -i ~/.ssh/<ssh-key> -L 8081:127.0.0.1:81 <user>@<server-ip>
 # Open: http://127.0.0.1:8081
 ```
 

@@ -170,14 +170,14 @@ The VPS deployment is expected to live in `~/spread-dashboard` and track
 Check the deployed commit:
 
 ```bash
-ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230 \
+ssh -i ~/.ssh/<ssh-key> <user>@<server-ip> \
   'cd ~/spread-dashboard && git status --short --branch && git rev-parse --short HEAD'
 ```
 
 Deploy the latest `main` manually:
 
 ```bash
-ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230
+ssh -i ~/.ssh/<ssh-key> <user>@<server-ip>
 cd ~/spread-dashboard
 git fetch origin --prune
 git reset --hard origin/main
@@ -246,14 +246,14 @@ git status --short --branch
 git rev-parse --short HEAD
 git rev-parse --short origin/main
 
-ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230 \
+ssh -i ~/.ssh/<ssh-key> <user>@<server-ip> \
   'cd ~/spread-dashboard && git status --short --branch && git rev-parse --short HEAD && git rev-parse --short origin/main'
 ```
 
 Check production containers:
 
 ```bash
-ssh -i ~/.ssh/hetzner_ed25519 deploy@5.223.65.230 \
+ssh -i ~/.ssh/<ssh-key> <user>@<server-ip> \
   'cd ~/spread-dashboard && docker compose -f docker-compose.prod.yml ps'
 ```
 
